@@ -31,27 +31,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'pnpm'
-          cache-dependency-path: '**/pnpm-lock.yaml'
+          # cache: 'pnpm'
+          # cache-dependency-path: '**/pnpm-lock.yaml'
 
       - name: Install dependencies
         run: |
-          cd libs/star-node-stack-helper
           pnpm install
 
       - name: Run linting
         run: |
-          cd libs/star-node-stack-helper
           pnpm run lint
 
       - name: Run tests
         run: |
-          cd libs/star-node-stack-helper
           pnpm run test:ci
 
       - name: Build package
         run: |
-          cd libs/star-node-stack-helper
           pnpm run build
 
       - name: Upload coverage reports
