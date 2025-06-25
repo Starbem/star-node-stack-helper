@@ -246,9 +246,9 @@ Após a publicação, verifique:
 - **Causa**: Configuração incorreta do cache (usando package-lock.json em vez de pnpm-lock.yaml)
 - **Solução**:
   - Verifique se todos os workflows usam `cache: 'pnpm'`
-  - Confirme que `cache-dependency-path` aponta para `libs/star-node-stack-helper/pnpm-lock.yaml`
+  - Confirme que `cache-dependency-path` aponta para `**/pnpm-lock.yaml` (padrão glob)
   - Execute o workflow "Verify Cache Configuration" para testar
-- **Prevenção**: Sempre use `pnpm-lock.yaml` para projetos que usam pnpm
+- **Prevenção**: Sempre use `**/pnpm-lock.yaml` para projetos que usam pnpm em monorepos
 
 ### Erro de PNPM não encontrado
 - **Erro**: "Unable to locate executable file: pnpm"
