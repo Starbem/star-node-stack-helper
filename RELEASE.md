@@ -46,6 +46,25 @@ Executa quando um release é publicado:
 - Cria comentários informativos no repositório
 - Pode ser estendido para Slack, Discord, etc.
 
+### 5. Dependabot Configuration (`.github/dependabot.yml`)
+
+Configurado para atualizações automáticas de dependências:
+
+- Verifica atualizações semanalmente (segunda-feira às 09:00)
+- Atualiza apenas dependências diretas e indiretas
+- Ignora atualizações major de pacotes críticos (@aws-sdk, typescript, etc.)
+- Cria pull requests com labels apropriados
+- Atribui reviewers automaticamente
+
+### 6. Test Dependabot Configuration (`test-dependabot.yml`)
+
+Workflow para testar a configuração do Dependabot:
+
+- Verifica se os arquivos necessários existem
+- Testa a instalação de dependências
+- Verifica pacotes desatualizados
+- Executa semanalmente e manualmente
+
 ## Como Fazer um Release
 
 ### 1. Preparação

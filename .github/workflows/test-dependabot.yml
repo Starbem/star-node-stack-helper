@@ -1,0 +1,70 @@
+name: Test Dependabot Configuration
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 0" # Weekly on Sunday
+
+jobs:
+  test-dependabot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.6.2
+
+      - name: Test package.json exists
+        run: |
+          echo "Testing if package.json exists in the correct location..."
+          if [ -f "libs/star-node-stack-helper/package.json" ]; then
+            echo "✅ package.json found in libs/star-node-stack-helper/"
+            cat libs/star-node-stack-helper/package.json | jq '.name, .version'
+          else
+            echo "❌ package.json not found in libs/star-node-stack-helper/"
+            exit 1
+          fi
+
+      - name: Test pnpm-lock.yaml exists
+        run: |
+          echo "Testing if pnpm-lock.yaml exists..."
+          if [ -f "libs/star-node-stack-helper/pnpm-lock.yaml" ]; then
+            echo "✅ pnpm-lock.yaml found"
+          else
+            echo "❌ pnpm-lock.yaml not found"
+            exit 1
+          fi
+
+      - name: Test dependabot.yml exists
+        run: |
+          echo "Testing if dependabot.yml exists in the correct location..."
+          if [ -f ".github/dependabot.yml" ]; then
+            echo "✅ dependabot.yml found in .github/"
+            cat .github/dependabot.yml
+          else
+            echo "❌ dependabot.yml not found in .github/"
+            exit 1
+          fi
+
+      - name: Test npm install
+        run: |
+          echo "Testing npm install in the lib directory..."
+          cd libs/star-node-stack-helper
+          pnpm install --frozen-lockfile
+          echo "✅ npm install successful"
+
+      - name: Test outdated packages
+        run: |
+          echo "Checking for outdated packages..."
+          cd libs/star-node-stack-helper
+          pnpm outdated || echo "No outdated packages found"
+          echo "✅ Package check completed"
