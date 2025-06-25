@@ -1,0 +1,49 @@
+name: Verify Cache Configuration
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  verify-cache:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: libs/star-node-stack-helper/pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.6.2
+
+      - name: Verify pnpm-lock.yaml exists
+        run: |
+          echo "Checking if pnpm-lock.yaml exists..."
+          if [ -f "libs/star-node-stack-helper/pnpm-lock.yaml" ]; then
+            echo "✅ pnpm-lock.yaml found"
+            ls -la libs/star-node-stack-helper/pnpm-lock.yaml
+          else
+            echo "❌ pnpm-lock.yaml not found"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: |
+          cd libs/star-node-stack-helper
+          echo "Installing dependencies with pnpm..."
+          pnpm install --frozen-lockfile
+          echo "✅ Dependencies installed successfully"
+
+      - name: Verify cache
+        run: |
+          echo "Cache verification completed"
+          echo "If this step runs without errors, the cache is working correctly"

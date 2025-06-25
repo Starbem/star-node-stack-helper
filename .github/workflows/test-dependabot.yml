@@ -3,7 +3,7 @@ name: Test Dependabot Configuration
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 0 * * 0" # Weekly on Sunday
+    - cron: '0 0 * * 0' # Weekly on Sunday
 
 jobs:
   test-dependabot:
@@ -16,7 +16,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: libs/star-node-stack-helper/pnpm-lock.yaml
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4

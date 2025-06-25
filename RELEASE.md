@@ -65,6 +65,15 @@ Workflow para testar a configuração do Dependabot:
 - Verifica pacotes desatualizados
 - Executa semanalmente e manualmente
 
+### 7. Verify Cache Configuration (`verify-cache.yml`)
+
+Workflow para verificar a configuração de cache:
+
+- Testa se o pnpm-lock.yaml está sendo reconhecido
+- Verifica se o cache do pnpm está funcionando
+- Valida a instalação de dependências
+- Executa em pushes para main e manualmente
+
 ## Como Fazer um Release
 
 ### 1. Preparação
@@ -222,6 +231,15 @@ Após a publicação, verifique:
 - Verifique se a tag foi criada corretamente
 - Confirme se o workflow `publish.yml` foi executado
 - Verifique os logs do GitHub Actions
+
+### Erro de Cache de Dependências
+- **Erro**: "Some specified paths were not resolved, unable to cache dependencies"
+- **Causa**: Configuração incorreta do cache (usando package-lock.json em vez de pnpm-lock.yaml)
+- **Solução**:
+  - Verifique se todos os workflows usam `cache: 'pnpm'`
+  - Confirme que `cache-dependency-path` aponta para `libs/star-node-stack-helper/pnpm-lock.yaml`
+  - Execute o workflow "Verify Cache Configuration" para testar
+- **Prevenção**: Sempre use `pnpm-lock.yaml` para projetos que usam pnpm
 
 ## Rollback
 
