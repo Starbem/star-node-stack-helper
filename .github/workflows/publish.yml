@@ -31,8 +31,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          # cache: 'pnpm'
-          # cache-dependency-path: '**/pnpm-lock.yaml'
 
       - name: Install dependencies
         run: |
@@ -49,14 +47,6 @@ jobs:
       - name: Build package
         run: |
           pnpm run build
-
-      - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
-        with:
-          file: libs/star-node-stack-helper/coverage/lcov.info
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
 
   publish:
     needs: test
