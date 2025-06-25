@@ -1,7 +1,7 @@
 {
   "name": "star-node-stack-helper",
-  "version": "1.0.0",
-  "description": "A helper to be used with node and aws stack",
+  "version": "1.1.0",
+  "description": "A helper library for Node.js applications that provides utilities for AWS Secrets Manager integration and Elasticsearch/OpenSearch logging with enterprise-grade features.",
   "author": "Julio Sousa <julio.sousa@starbem.app>",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -26,7 +26,10 @@
     "secrets-manager",
     "elasticsearch",
     "opensearch",
-    "logging"
+    "logging",
+    "iam-roles",
+    "retry-logic",
+    "health-check"
   ],
   "scripts": {
     "build": "tsc",
@@ -43,12 +46,12 @@
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.830.0",
-    "@opensearch-project/opensearch": "^2.4.0",
-    "uuid": "^11.1.0"
+    "@aws-sdk/credential-provider-node": "^3.835.0",
+    "@opensearch-project/opensearch": "^2.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.29.0",
-    "@types/jest": "^30.0.0",
+    "@types/jest": "^29.5.11",
     "@types/node": "^24.0.3",
     "@types/uuid": "^10.0.0",
     "eslint": "^9.29.0",
@@ -57,10 +60,10 @@
     "eslint-plugin-prettier": "^5.4.1",
     "globals": "^16.2.0",
     "husky": "^9.1.7",
-    "jest": "^30.0.0",
+    "jest": "^29.7.0",
     "lint-staged": "^16.1.2",
     "prettier": "^3.5.3",
-    "ts-jest": "^30.0.0",
+    "ts-jest": "^29.1.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.34.1"

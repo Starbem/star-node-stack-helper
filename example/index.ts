@@ -1,38 +1,49 @@
 import * as express from 'express'
-import { ElasticLogger, LoggerConfig } from '../src'
+import {
+  ElasticLogger,
+  LoggerConfig,
+  loadSecrets,
+  testSavedSecrets,
+} from '../src'
 
-const config = {
+const loggerConfig: LoggerConfig = {
   service: 'star-node-stack-helper-example',
   environment: 'dev',
   username: 'admin',
   password: 'Teste@2025',
   node: 'http://localhost:9200',
-}
-
-const loggerConfig: LoggerConfig = {
-  ...config,
   index: 'system-logs',
+  region: 'us-east-2',
 }
 
+// TODO: Add logger config example
 const logger = new ElasticLogger(loggerConfig)
 
 const app = express()
 
-app.get('/system-logs/add', (req, res) => {
+// TODO: Add system logs example
+app.get('/system-logs/add', async (req, res) => {
+  const level = 'info'
+  const message = 'Log example message'
   const body = {
-    message: 'Log example',
-    level: 'error',
     id: '123',
     timestamp: new Date().toISOString(),
   }
 
+  await logger.log(level, message, body)
+
   res.json({
     message: 'Log saved successfully',
-    body,
+    data: {
+      level,
+      message,
+      body,
+    },
   })
 })
 
-app.get('/logs-transactions/add', (req, res) => {
+// TODO: Add transaction example
+app.get('/logs-transactions/add', async (req, res) => {
   const body = {
     service: 'accounts-ms',
     name: 'Transaction example',
@@ -55,7 +66,7 @@ app.get('/logs-transactions/add', (req, res) => {
     },
   }
 
-  logger.logTransaction(body)
+  await logger.logTransaction(body)
 
   res.json({
     message: 'Log transaction saved successfully',
@@ -63,6 +74,7 @@ app.get('/logs-transactions/add', (req, res) => {
   })
 })
 
+// TODO: search system logs example
 app.get('/system-logs', async (req, res) => {
   const logs = await logger.getSystemLogs('Log example')
   res.json({
@@ -71,6 +83,7 @@ app.get('/system-logs', async (req, res) => {
   })
 })
 
+// TODO: search logs transactions example
 app.get('/logs-transactions', async (req, res) => {
   const transactions = await logger.getLogsTransactions('Transaction example')
   res.json({
@@ -79,6 +92,23 @@ app.get('/logs-transactions', async (req, res) => {
   })
 })
 
+// TODO: add secrets example
+app.get('/secrets', async (req, res) => {
+  const secrets = await loadSecrets({
+    region: 'us-east-2',
+    secretName: ['dev/video-microservice/env', 'dev/notification-service/env'],
+  })
+
+  console.log(secrets)
+  testSavedSecrets()
+
+  res.json({
+    message: 'Secrets fetched successfully',
+    secrets,
+  })
+})
+
+// TODO: start server example
 app.listen(3000, () => {
   console.log('Server is running on port 3000')
 })

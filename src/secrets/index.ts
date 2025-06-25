@@ -3,18 +3,32 @@ import {
   GetSecretValueCommand,
   type SecretsManagerClientConfig,
 } from '@aws-sdk/client-secrets-manager'
-import { SecretConfig } from './types'
-
-interface RetryConfig {
-  maxAttempts: number
-  delayMs: number
-}
+import { SecretConfig, RetryConfig } from './types'
 
 const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxAttempts: 3,
   delayMs: 1000,
 }
 
+/**
+ * Validate the configuration object.
+ *
+ * @param {SecretConfig} config - The configuration object containing the secret name and region.
+ * @returns {void}
+ */
+
+/**
+ * Validate the configuration object.
+ *
+ * @param {SecretConfig} config - The configuration object containing the secret name and region.
+ * @returns {void}
+ */
+/**
+ * Validate the configuration object.
+ *
+ * @param {SecretConfig} config - The configuration object containing the secret name and region.
+ * @returns {void}
+ */
 function validateConfig(config: SecretConfig): void {
   if (!config.region) {
     throw new Error('AWS region is required')
@@ -23,18 +37,23 @@ function validateConfig(config: SecretConfig): void {
   if (!config.secretName) {
     throw new Error('Secret name is required')
   }
-
-  // Only require credentials if not using IAM roles
-  if (
-    !process.env['AWS_ACCESS_KEY_ID'] &&
-    !process.env['AWS_SECRET_ACCESS_KEY']
-  ) {
-    if (!config.accessKeyId || !config.secretAccessKey) {
-      throw new Error('AWS credentials are required when not using IAM roles')
-    }
-  }
 }
 
+/**
+ * Create a Secrets Manager client configuration.
+ *
+ * @param {SecretConfig} config - The configuration object containing the secret name and region.
+ * @returns {SecretsManagerClientConfig} A Secrets Manager client configuration.
+ *
+ * @example
+ * ```typescript
+ * const clientConfig = createClientConfig({
+ *   secretName: 'dev/video-microservice/env',
+ *   region: 'us-east-2',
+ * })
+ * // Output: { region: 'us-east-2', maxAttempts: 3 }
+ * ```
+ */
 function createClientConfig(config: SecretConfig): SecretsManagerClientConfig {
   const clientConfig: SecretsManagerClientConfig = {
     region: config.region,
@@ -59,10 +78,37 @@ function createClientConfig(config: SecretConfig): SecretsManagerClientConfig {
   return clientConfig
 }
 
+/**
+ * Delay for a given number of milliseconds.
+ *
+ * @param {number} ms - The number of milliseconds to delay.
+ * @returns {Promise<void>} A promise that resolves after the delay.
+ *
+ * @example
+ * ```typescript
+ * await delay(1000)
+ * // Output: A promise that resolves after 1 second
+ * ```
+ */
 async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/**
+ * Retry an operation with exponential backoff.
+ *
+ * @param {() => Promise<T>} operation - The operation to retry.
+ * @param {RetryConfig} [retryConfig] - The retry configuration for the operation.
+ * @returns {Promise<T>} A promise that resolves to the result of the operation.
+ *
+ * @example
+ * ```typescript
+ * const result = await retryWithBackoff(async () => {
+ *   return await someOperation()
+ * })
+ * // Output: The result of the operation
+ * ```
+ */
 async function retryWithBackoff<T>(
   operation: () => Promise<T>,
   retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG
@@ -92,6 +138,22 @@ async function retryWithBackoff<T>(
   throw lastError!
 }
 
+/**
+ * Load secrets from AWS Secrets Manager.
+ *
+ * @param {SecretConfig} config - The configuration object containing the secret name and region.
+ * @param {RetryConfig} [retryConfig] - The retry configuration for the operation.
+ * @returns {Promise<Record<string, string>>} A promise that resolves to a record of secret names and their values.
+ *
+ * @example
+ * ```typescript
+ * const secrets = await loadSecrets({
+ *   secretName: 'dev/video-microservice/env',
+ *   region: 'us-east-2',
+ * })
+ * // Output: { NODE_ENV: 'development', DATABASE_URL: '...', API_KEY: '...', ... }
+ * ```
+ */
 export async function loadSecrets(
   config: SecretConfig,
   retryConfig?: RetryConfig
@@ -159,14 +221,49 @@ export async function loadSecrets(
   return allSecrets
 }
 
-// Utility function to check if running on AWS (EC2, Lambda, etc.)
+/**
+ * Test function to display all saved secrets in the environment variables.
+ * This function logs all environment variables to the console for debugging purposes.
+ * Useful for verifying that secrets were properly loaded and set as environment variables.
+ *
+ * @example
+ * ```typescript
+ * testSavedSecrets()
+ * // Output: { NODE_ENV: 'development', DATABASE_URL: '...', API_KEY: '...', ... } 'SAVED SECRETS'
+ * ```
+ */
+export function testSavedSecrets(): void {
+  console.log(process.env, 'SAVED SECRETS')
+}
+
+/**
+ * Check if the current process is running on AWS (EC2, Lambda, etc.).
+ *
+ * @returns {boolean} True if running on AWS, false otherwise.
+ *
+ * @example
+ * ```typescript
+ * isRunningOnAWS()
+ * // Output: true
+ * ```
+ */
 export function isRunningOnAWS(): boolean {
   return !!(
     process.env['AWS_EXECUTION_ENV'] || process.env['AWS_LAMBDA_FUNCTION_NAME']
   )
 }
 
-// Utility function to get AWS region from environment
+/**
+ * Get the AWS region from the environment variables.
+ *
+ * @returns {string | undefined} The AWS region.
+ *
+ * @example
+ * ```typescript
+ * getAWSRegion()
+ * // Output: 'us-east-1'
+ * ```
+ */
 export function getAWSRegion(): string | undefined {
   return process.env['AWS_REGION'] || process.env['AWS_DEFAULT_REGION']
 }

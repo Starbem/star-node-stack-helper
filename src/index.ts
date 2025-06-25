@@ -1,5 +1,10 @@
 // Functions
-export { loadSecrets, isRunningOnAWS, getAWSRegion } from './secrets'
+export {
+  loadSecrets,
+  testSavedSecrets,
+  isRunningOnAWS,
+  getAWSRegion,
+} from './secrets'
 export { ElasticLogger } from './logger'
 
 // Types

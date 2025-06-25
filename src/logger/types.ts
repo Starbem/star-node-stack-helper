@@ -1,10 +1,12 @@
 export interface LoggerConfig {
   node: string
-  username: string
-  password: string
+  authType?: 'aws' | 'basic'
+  username?: string
+  password?: string
   index: string
   service: string
   environment: string
+  region: string
 }
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'debug'
