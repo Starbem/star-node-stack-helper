@@ -74,6 +74,15 @@ Workflow para verificar a configuração de cache:
 - Valida a instalação de dependências
 - Executa em pushes para main e manualmente
 
+### 8. Test PNPM Setup (`test-pnpm.yml`)
+
+Workflow para testar a configuração do pnpm:
+
+- Verifica se o pnpm está disponível no PATH
+- Testa comandos básicos do pnpm
+- Valida a instalação de dependências
+- Executa em pushes para main e manualmente
+
 ## Como Fazer um Release
 
 ### 1. Preparação
@@ -240,6 +249,15 @@ Após a publicação, verifique:
   - Confirme que `cache-dependency-path` aponta para `libs/star-node-stack-helper/pnpm-lock.yaml`
   - Execute o workflow "Verify Cache Configuration" para testar
 - **Prevenção**: Sempre use `pnpm-lock.yaml` para projetos que usam pnpm
+
+### Erro de PNPM não encontrado
+- **Erro**: "Unable to locate executable file: pnpm"
+- **Causa**: Ordem incorreta dos steps (Node.js setup antes do pnpm setup)
+- **Solução**:
+  - Configure pnpm ANTES do Node.js setup
+  - Ordem correta: Checkout → Setup pnpm → Setup Node.js → Install dependencies
+  - Execute o workflow "Test PNPM Setup" para verificar
+- **Prevenção**: Sempre siga a ordem: pnpm setup → Node.js setup
 
 ## Rollback
 

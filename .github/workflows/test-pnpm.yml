@@ -1,0 +1,48 @@
+name: Test PNPM Setup
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  test-pnpm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.6.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: libs/star-node-stack-helper/pnpm-lock.yaml
+
+      - name: Verify pnpm is available
+        run: |
+          echo "Testing pnpm availability..."
+          pnpm --version
+          which pnpm
+          echo "✅ pnpm is available"
+
+      - name: Test pnpm install
+        run: |
+          cd libs/star-node-stack-helper
+          echo "Testing pnpm install..."
+          pnpm install --frozen-lockfile
+          echo "✅ pnpm install successful"
+
+      - name: Test pnpm commands
+        run: |
+          cd libs/star-node-stack-helper
+          echo "Testing pnpm commands..."
+          pnpm run --help
+          pnpm list --depth=0
+          echo "✅ pnpm commands working"
