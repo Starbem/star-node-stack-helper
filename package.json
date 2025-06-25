@@ -1,6 +1,6 @@
 {
   "name": "@starbemtech/star-node-stack-helper",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "A helper library for Node.js applications that provides utilities for AWS Secrets Manager integration and Elasticsearch/OpenSearch logging with enterprise-grade features.",
   "author": "Julio Sousa <julio.sousa@starbem.app>",
   "main": "./dist/index.js",
@@ -46,6 +46,10 @@
     "version:patch": "npm version patch",
     "version:minor": "npm version minor",
     "version:major": "npm version major",
+    "release": "bash scripts/release.sh",
+    "release:patch": "npm version patch && git push origin --tags",
+    "release:minor": "npm version minor && git push origin --tags",
+    "release:major": "npm version major && git push origin --tags",
     "prepublishOnly": "npm run clean && npm run build && npm run test:ci"
   },
   "dependencies": {
