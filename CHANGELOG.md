@@ -5,63 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2024-12-19
+## [Unreleased]
 
 ### Added
 
-- **IAM Roles Support**: Automatic AWS credentials detection for EC2, Lambda, and ECS
-- **Retry Logic**: Exponential backoff retry mechanism for AWS Secrets Manager operations
-- **Health Check**: `healthCheck()` method for Elasticsearch/OpenSearch cluster monitoring
-- **Utility Functions**:
-  - `isRunningOnAWS()` - Detect if running on AWS infrastructure
-  - `getAWSRegion()` - Get AWS region from environment variables
-  - `testSavedSecrets()` - Debug function for development
-- **Enhanced Type Safety**: Strict TypeScript configuration with comprehensive type checking
-- **SSL Security**: Conditional SSL verification based on environment
-- **Comprehensive Error Handling**: Better error messages and logging
-- **Input Validation**: Robust validation for all configuration parameters
+- GitHub Actions pipeline for automated releases
+- Automated changelog generation
+- Quality checks and security audits
+- Dependabot configuration for dependency updates
 
 ### Changed
 
-- **TypeScript Configuration**: Upgraded to strict mode with additional safety checks
-- **Jest Configuration**: Optimized test setup with coverage reporting
-- **Package.json**: Added new scripts and improved dependencies
-- **Documentation**: Complete README rewrite with comprehensive examples
-- **Error Messages**: More descriptive and actionable error messages
+- Improved build process with TypeScript configuration
+- Enhanced package.json with versioning scripts
 
-### Fixed
-
-- **SSL Configuration**: Fixed insecure SSL settings in production
-- **Duplicate Code**: Eliminated code duplication in search methods
-- **Type Safety**: Removed all `any` types and added proper interfaces
-- **Configuration Validation**: Added validation for all required fields
-
-### Security
-
-- **IAM Integration**: Support for AWS IAM roles instead of hardcoded credentials
-- **SSL Verification**: Proper SSL verification in production environments
-- **Input Sanitization**: Validation and sanitization of all inputs
-
-## [1.0.0] - 2024-12-18
+## [1.1.0] - 2024-01-XX
 
 ### Added
 
-- Initial release
-- AWS Secrets Manager integration
-- Elasticsearch/OpenSearch logging
-- Basic TypeScript support
-- Jest testing setup
-- ESLint and Prettier configuration
-- Docker development environment
+- Initial release of star-node-stack-helper
+- AWS Secrets Manager integration utilities
+- Elasticsearch/OpenSearch logging with enterprise features
+- IAM roles support
+- Retry logic implementation
+- Health check utilities
 
 ### Features
 
-- `loadSecrets()` - Load secrets from AWS Secrets Manager
-- `ElasticLogger` - Comprehensive logging with transaction tracking
-- Basic error handling and logging
-- Development tools integration
+- Comprehensive TypeScript support
+- Full test coverage
+- ESLint and Prettier configuration
+- Husky pre-commit hooks
 
 ---
+
+## Release Process
+
+This project uses automated releases via GitHub Actions. When a new tag is pushed:
+
+1. **Tests are run** on multiple Node.js versions (18, 20, 22)
+2. **Package is built** and validated
+3. **Published to NPM** automatically
+4. **GitHub Release is created** with changelog
+5. **Release notes are updated** with recent changes
+
+### Making a Release
+
+```bash
+# 1. Choose version type
+pnpm run version:patch   # 1.1.0 → 1.1.1
+pnpm run version:minor   # 1.1.0 → 1.2.0
+pnpm run version:major   # 1.1.0 → 2.0.0
+
+# 2. Push tag to trigger release
+git push origin --tags
+```
+
+### Release Links
+
+- [NPM Package](https://www.npmjs.com/package/star-node-stack-helper)
+- [GitHub Releases](https://github.com/starbem/star-node-stack-helper/releases)
+- [GitHub Actions](https://github.com/starbem/star-node-stack-helper/actions)
 
 ## Versioning
 

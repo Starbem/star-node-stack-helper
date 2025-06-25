@@ -1,0 +1,27 @@
+version: 2
+updates:
+  # Enable version updates for npm
+  - package-ecosystem: "npm"
+    directory: "/libs/star-node-stack-helper"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "juliosousa"
+    assignees:
+      - "juliosousa"
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "npm"
+    ignore:
+      # Ignore major version updates for these packages
+      - dependency-name: "@aws-sdk/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@opensearch-project/opensearch"
+        update-types: ["version-update:semver-major"]
