@@ -96,7 +96,7 @@ jobs:
             Package: `star-node-stack-helper@${{ github.ref_name }}`
 
             ### 🔗 Links
-            - [NPM Package](https://www.npmjs.com/package/star-node-stack-helper)
+            - [NPM Package](https://www.npmjs.com/package/@starbemtech/star-node-stack-helper)
             - [Documentation](https://github.com/starbem/star-node-stack-helper#readme)
 
             ### 📋 What's Changed
