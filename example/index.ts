@@ -1,98 +1,208 @@
 import * as express from 'express'
+import { RequestHandler } from 'express'
 import {
-  ElasticLogger,
-  LoggerConfig,
+  // initializeLogger,
+  getSystemLogger,
+  getPinoLogger,
   loadSecrets,
   testSavedSecrets,
+  transactionLogger,
+  addTransactionId,
 } from '../src'
 
-const loggerConfig: LoggerConfig = {
-  service: 'star-node-stack-helper-example',
-  environment: 'dev',
-  username: 'admin',
-  password: 'Teste@2025',
-  node: 'http://localhost:9200',
-  index: 'system-logs',
-  region: 'us-east-2',
-}
+// Initialize the new logging system
+async function initializeLogging() {
+  try {
+    // Option 1: Use environment-based config (reads from process.env)
+    // const result = await initializeLogger('star-node-stack-helper-example', 'development')
+    // initializeLogger('star-node-stack-helper-example', 'development')
 
-// TODO: Add logger config example
-const logger = new ElasticLogger(loggerConfig)
+    // Option 2: Manual configuration (recommended for examples)
+    const { LoggerFactory } = await import('../src')
+
+    const result = await LoggerFactory.initialize({
+      authType: 'aws',
+      opensearch: {
+        node:
+          process.env['OPENSEARCH_NODE'] ||
+          'https://kpeu8wpqqhglaa92dhx1.us-east-2.aoss.amazonaws.com',
+        // username: process.env['OPENSEARCH_USERNAME'] || 'admin',
+        // password: process.env['OPENSEARCH_PASSWORD'] || 'admin',
+        // region: process.env['AWS_REGION'] || 'us-east-1',
+        region: 'us-east-2',
+      },
+      service: {
+        name: 'star-node-stack-helper-example',
+        environment: 'development',
+        index: 'example-logs',
+      },
+      logging: {
+        level: 'info',
+        enableTransactionLogs: true,
+        enableSystemLogs: true,
+        sensitiveFields: ['password', 'token', 'secret', 'authorization'],
+      },
+    })
+
+    if (!result.success) {
+      console.warn(
+        '⚠️ OpenSearch not available, using PinoLogger only:',
+        result.error
+      )
+      console.log('✅ PinoLogger initialized successfully')
+      return true // Continue with PinoLogger only
+    }
+
+    console.log('✅ Full logging system initialized successfully')
+    return true
+  } catch (error) {
+    console.warn(
+      '⚠️ Failed to initialize logging system, using PinoLogger only:',
+      error
+    )
+    console.log('✅ PinoLogger initialized successfully')
+    return true // Continue with PinoLogger only
+  }
+}
 
 const app = express()
 
-// TODO: Add system logs example
+// Add middleware
+app.use(express.json())
+app.use(addTransactionId as unknown as RequestHandler)
+
+// System logs example using new SystemLogger or PinoLogger
 app.get('/system-logs/add', async (req, res) => {
-  const level = 'info'
-  const message = 'Log example message'
-  const body = {
+  const systemLogger = getSystemLogger()
+  const pinoLogger = getPinoLogger()
+  const transactionId = req.transactionId
+
+  const logData = {
     id: '123',
     timestamp: new Date().toISOString(),
+    operation: 'system_log_example',
+    transactionId,
   }
 
-  await logger.log(level, message, body)
+  try {
+    // Try SystemLogger first (if OpenSearch is available)
+    await systemLogger.info(
+      'System log example message',
+      logData,
+      transactionId
+    )
+  } catch (error) {
+    // Fallback to PinoLogger
+    pinoLogger.info('System log example message', logData)
+  }
 
   res.json({
-    message: 'Log saved successfully',
-    data: {
-      level,
-      message,
-      body,
-    },
+    message: 'System log saved successfully',
+    transactionId,
+    logger: systemLogger ? 'SystemLogger + OpenSearch' : 'PinoLogger only',
   })
 })
 
-// TODO: Add transaction example
-app.get('/logs-transactions/add', async (req, res) => {
-  const body = {
-    service: 'accounts-ms',
-    name: 'Transaction example',
-    status: 'success' as const,
-    duration: 1000,
-    context: {
-      message: 'Log example',
-      id: '123',
-      timestamp: new Date().toISOString(),
-      type: 'transaction',
-      data: {
-        name: 'John Doe',
-        email: 'john.doe@example.com',
-      },
+// Transaction logs example using new SystemLogger or PinoLogger
+app.get(
+  '/transaction-logs/add',
+  transactionLogger('transaction_example', {
+    sensitiveFields: ['password', 'token'],
+    customExtractors: {
+      userId: (req: any) => req.headers['x-user-id'],
     },
-    requestMeta: {
-      method: 'GET',
-      path: '/logs-transactions/add',
-      ip: '127.0.0.1',
-    },
+  }) as unknown as RequestHandler,
+  async (req, res) => {
+    const systemLogger = getSystemLogger()
+    const pinoLogger = getPinoLogger()
+    const transactionId = req.transactionId
+
+    const businessData = {
+      name: 'John Doe',
+      email: 'john.doe@example.com',
+      operation: 'transaction_example',
+      transactionId,
+    }
+
+    try {
+      // Try SystemLogger first (if OpenSearch is available)
+      await systemLogger.businessEvent(
+        'transaction_created',
+        businessData,
+        transactionId
+      )
+    } catch (error) {
+      // Fallback to PinoLogger
+      pinoLogger.business('transaction_created', businessData)
+    }
+
+    res.json({
+      message: 'Transaction log saved successfully',
+      transactionId,
+      logger: systemLogger ? 'SystemLogger + OpenSearch' : 'PinoLogger only',
+    })
   }
+)
 
-  await logger.logTransaction(body)
-
-  res.json({
-    message: 'Log transaction saved successfully',
-    body,
-  })
-})
-
-// TODO: search system logs example
+// Search system logs example
 app.get('/system-logs', async (req, res) => {
-  const logs = await logger.getSystemLogs('Log example')
-  res.json({
-    message: 'Logs fetched successfully',
-    logs,
-  })
+  const systemLogger = getSystemLogger()
+  const { searchTerm, transactionId } = req.query
+
+  try {
+    const logs = await systemLogger.getSystemLogs(
+      searchTerm as string,
+      transactionId as string
+    )
+
+    res.json({
+      message: 'System logs fetched successfully',
+      logs,
+      total: logs.length,
+      source: 'OpenSearch',
+    })
+  } catch (error) {
+    res.json({
+      message: 'OpenSearch not available - logs are only in console',
+      logs: [],
+      total: 0,
+      source: 'PinoLogger (console only)',
+      note: 'Check your console for Pino logs',
+    })
+  }
 })
 
-// TODO: search logs transactions example
-app.get('/logs-transactions', async (req, res) => {
-  const transactions = await logger.getLogsTransactions('Transaction example')
-  res.json({
-    message: 'Transactions fetched successfully',
-    transactions,
-  })
+// Search transaction logs example
+app.get('/transaction-logs', async (req, res) => {
+  const systemLogger = getSystemLogger()
+  const { transactionId } = req.query
+
+  console.log('transactionId', transactionId)
+
+  try {
+    const transactions = await systemLogger.getTransactionLogs(
+      ['transaction_example'],
+      transactionId as string
+    )
+
+    res.json({
+      message: 'Transaction logs fetched successfully',
+      transactions,
+      total: transactions.length,
+      source: 'OpenSearch',
+    })
+  } catch (error) {
+    res.json({
+      message: 'OpenSearch not available - logs are only in console',
+      transactions: [],
+      total: 0,
+      source: 'PinoLogger (console only)',
+      note: 'Check your console for Pino logs',
+    })
+  }
 })
 
-// TODO: add secrets example
+// Secrets example
 app.get('/secrets', async (req, res) => {
   const secrets = await loadSecrets({
     region: 'us-east-2',
@@ -108,7 +218,99 @@ app.get('/secrets', async (req, res) => {
   })
 })
 
-// TODO: start server example
-app.listen(3000, () => {
-  console.log('Server is running on port 3000')
+// Pino logger example
+app.get('/pino-logs', async (req, res) => {
+  const pinoLogger = getPinoLogger()
+
+  pinoLogger.info('Pino log example', {
+    operation: 'pino_example',
+    timestamp: new Date().toISOString(),
+  })
+
+  pinoLogger.warn('Pino warning example', {
+    level: 'warning',
+    message: 'This is a warning',
+  })
+
+  pinoLogger.error('Pino error example', {
+    error: new Error('Sample error'),
+    context: 'pino_error_test',
+  })
+
+  res.json({
+    message: 'Pino logs created successfully',
+    check: 'Check your console for Pino logs',
+  })
+})
+
+// Example without decorators (simplified)
+app.post(
+  '/users',
+  transactionLogger('create_user', {
+    sensitiveFields: ['password'],
+    customExtractors: {
+      userId: (req: any) => req.headers['x-user-id'],
+    },
+  }) as unknown as RequestHandler,
+  async (req, res) => {
+    const { name, email } = req.body
+    const systemLogger = getSystemLogger()
+    const pinoLogger = getPinoLogger()
+    const transactionId = req.transactionId
+
+    const userData = { name, email, transactionId }
+
+    try {
+      // Try SystemLogger first (if OpenSearch is available)
+      await systemLogger.businessEvent(
+        'user_creation_started',
+        userData,
+        transactionId
+      )
+    } catch (error) {
+      // Fallback to PinoLogger
+      pinoLogger.business('user_creation_started', userData)
+    }
+
+    const user = {
+      id: `user_${Date.now()}`,
+      name,
+      email,
+      createdAt: new Date().toISOString(),
+    }
+
+    res.json({
+      message: 'User created successfully',
+      user,
+      transactionId,
+      logger: systemLogger ? 'SystemLogger + OpenSearch' : 'PinoLogger only',
+    })
+  }
+)
+
+// Start server
+async function startServer() {
+  const loggingInitialized = await initializeLogging()
+
+  if (!loggingInitialized) {
+    console.error('❌ Failed to initialize logging system')
+    process.exit(1)
+  }
+
+  app.listen(3000, () => {
+    console.log('🚀 Server is running on port 3000')
+    console.log('📊 System logs: http://localhost:3000/system-logs/add')
+    console.log(
+      '📝 Transaction logs: http://localhost:3000/logs-transactions/add'
+    )
+    console.log('🔍 Search logs: http://localhost:3000/system-logs')
+    console.log('🔐 Secrets: http://localhost:3000/secrets')
+    console.log('📋 Pino logs: http://localhost:3000/pino-logs')
+    console.log('👤 Create user: http://localhost:3000/users')
+  })
+}
+
+startServer().catch((error) => {
+  console.error('❌ Error starting server:', error)
+  process.exit(1)
 })

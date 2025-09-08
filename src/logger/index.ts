@@ -19,6 +19,7 @@ export class ElasticLogger {
   private readonly timeout = 30000
 
   constructor(config: LoggerConfig) {
+    console.log('config', config)
     this.validateConfig(config)
     this.index = config.index
     this.service = config.service
@@ -35,19 +36,22 @@ export class ElasticLogger {
     }
 
     if (config.authType === 'aws' || (!config.username && !config.password)) {
+      console.log('Using AWS SigV4 authentication')
       // Use AWS SigV4 authentication
       Object.assign(
         clientConfig,
         AwsSigv4Signer({
           region: this.region,
           service: 'aoss',
-          getCredentials: () => {
+          getCredentials: async () => {
             const credentialsProvider = defaultProvider()
-            return credentialsProvider()
+            console.log('credentialsProvider', await credentialsProvider())
+            return await credentialsProvider()
           },
         })
       )
     } else if (config.username && config.password) {
+      console.log('Using username/password authentication')
       // Use username/password authentication
       clientConfig.auth = {
         username: config.username,
@@ -58,6 +62,8 @@ export class ElasticLogger {
         'Authentication configuration is required. Either set authType: "aws" or provide username and password.'
       )
     }
+
+    console.log('clientConfig', clientConfig)
 
     this.client = new Client(clientConfig)
   }

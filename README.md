@@ -6,6 +6,9 @@ A helper library for Node.js applications that provides utilities for AWS Secret
 
 - 🔐 AWS Secrets Manager integration with IAM roles support
 - 📝 Elasticsearch/OpenSearch logging with transaction tracking
+- 🚀 **NEW**: Advanced logging system with middleware and decorators
+- 🎯 **NEW**: Automatic transaction logging for Express.js applications
+- 🏷️ **NEW**: Business event logging and security event tracking
 - 🛡️ TypeScript support with strict type checking
 - 🧪 Jest testing setup with coverage reporting
 - 📦 Modern development tools (ESLint, Prettier, Husky)
@@ -13,6 +16,10 @@ A helper library for Node.js applications that provides utilities for AWS Secret
 - 🏥 Health check and monitoring utilities
 - 🔒 SSL security configuration
 - 📊 Comprehensive error handling and logging
+- 🎨 **NEW**: Decorators for automatic logging in controllers
+- 🔧 **NEW**: LoggerFactory for easy initialization
+- 🛠️ **NEW**: Utility functions for request parsing and sensitive data filtering
+- 📝 **NEW**: Pino logger for local development and fallback logging
 
 ## Installation
 
@@ -111,7 +118,97 @@ await loadSecrets({
 testSavedSecrets()
 ```
 
-### Elasticsearch/OpenSearch Logger
+### Advanced Logging System
+
+The library now includes a comprehensive logging system with automatic transaction tracking, middleware for Express.js, decorators for controllers, and business event logging.
+
+#### Quick Start with LoggerFactory
+
+```typescript
+import {
+  initializeLogger,
+  transactionLogger,
+  addTransactionId,
+} from '@starbemtech/star-node-stack-helper'
+
+// Initialize logging system
+const result = await initializeLogger('my-service', 'development')
+if (!result.success) {
+  console.error('Failed to initialize logging:', result.error)
+}
+
+// Use in Express.js routes
+app.get(
+  '/api/endpoint',
+  addTransactionId,
+  transactionLogger('operation_name'),
+  controller
+)
+```
+
+#### Using Decorators in Controllers
+
+```typescript
+import {
+  LoggedApiOperation,
+  LoggedBusinessOperation,
+  LoggedMethod,
+} from '@starbemtech/star-node-stack-helper'
+
+class ExampleController {
+  @LoggedApiOperation('create_resource', {
+    logRequest: true,
+    logPerformance: true,
+    logBusinessEvent: true,
+    businessEventName: 'resource_created',
+    sensitiveFields: ['password', 'token', 'secret'],
+  })
+  async createResource(req: Request, res: Response) {
+    // Automatic logging of request, performance, and business events
+    // Your business logic here
+  }
+
+  @LoggedBusinessOperation('process_payment', 'payment_processed')
+  async processPayment(req: Request, res: Response) {
+    // Automatic logging for business operations
+  }
+
+  @LoggedMethod({
+    operation: 'validate_data',
+    logBusinessEvent: true,
+    businessEventName: 'data_validated',
+  })
+  async validateData(req: Request, res: Response) {
+    // Custom logging configuration
+  }
+}
+```
+
+#### System Logger for Business Events
+
+```typescript
+import {
+  getSystemLogger,
+  logBusinessEvent,
+  logSecurityEvent,
+} from '@starbemtech/star-node-stack-helper'
+
+// Log business events
+await logBusinessEvent('resource_created', {
+  resourceId: 'res_12345',
+  resourceType: 'document',
+  duration: 150,
+})
+
+// Log security events
+await logSecurityEvent('user_authentication_attempt', {
+  userId: 'user123',
+  ip: '192.168.1.100',
+  success: false,
+})
+```
+
+### Elasticsearch/OpenSearch Logger (Legacy)
 
 The library includes a comprehensive Elasticsearch/OpenSearch logger with transaction tracking, health monitoring, and robust error handling.
 
@@ -560,6 +657,269 @@ We welcome contributions to improve this library! Here's how you can help:
 ## License
 
 MIT
+
+## Advanced Features
+
+### Middleware for Express.js
+
+The library provides middleware for automatic transaction logging in Express.js applications:
+
+```typescript
+import {
+  transactionLogger,
+  addTransactionId,
+} from '@starbemtech/star-node-stack-helper'
+
+// Add transaction ID to all requests
+app.use(addTransactionId)
+
+// Log transactions for specific routes with custom configuration
+app.post(
+  '/api/resources',
+  transactionLogger('create_resource', {
+    sensitiveFields: ['password', 'token', 'secret'],
+    customExtractors: {
+      userId: (req) => req.headers['x-user-id'],
+      tenantId: (req) => req.headers['x-tenant-id'],
+    },
+  }),
+  controller
+)
+```
+
+### Decorators for Controllers
+
+Use decorators to automatically add logging to your controller methods:
+
+```typescript
+import {
+  LoggedMethod,
+  LoggedApiOperation,
+  LoggedBusinessOperation,
+} from '@starbemtech/star-node-stack-helper'
+
+class MyController {
+  @LoggedApiOperation('create_resource', {
+    logRequest: true,
+    logPerformance: true,
+    logBusinessEvent: true,
+    businessEventName: 'resource_created',
+  })
+  async createResource(req: Request, res: Response) {
+    // Automatic logging of request, performance, and business events
+  }
+
+  @LoggedBusinessOperation('process_payment', 'payment_processed')
+  async processPayment(req: Request, res: Response) {
+    // Automatic logging for business operations
+  }
+
+  @LoggedMethod({
+    operation: 'custom_operation',
+    logRequest: true,
+    logPerformance: true,
+    logBusinessEvent: true,
+    businessEventName: 'custom_event',
+  })
+  async customMethod(req: Request, res: Response) {
+    // Custom logging configuration
+  }
+}
+```
+
+### Utility Functions
+
+The library includes utility functions for request parsing and sensitive data filtering:
+
+```typescript
+import {
+  extractRequestData,
+  filterSensitiveFields,
+  generateTransactionId,
+} from '@starbemtech/star-node-stack-helper'
+
+// Extract request data
+const requestData = extractRequestData(req, ['password', 'token'])
+
+// Filter sensitive fields
+const filteredData = filterSensitiveFields(data, ['password', 'secret'])
+
+// Generate transaction ID
+const transactionId = generateTransactionId()
+```
+
+### Environment Configuration
+
+The library automatically configures itself based on the environment:
+
+```typescript
+import { getEnvironmentConfig } from '@starbemtech/star-node-stack-helper'
+
+// Get configuration for current environment
+const config = getEnvironmentConfig(process.env.NODE_ENV || 'development')
+
+// Initialize with environment-specific config
+const result = await LoggerFactory.initialize(config)
+```
+
+## Pino Logger (Local Development)
+
+The library includes a Pino logger for local development, testing, and fallback scenarios when OpenSearch is not available.
+
+### Basic Usage
+
+```typescript
+import {
+  PinoLogger,
+  getPinoConfig,
+  initializePinoLogger,
+} from '@starbemtech/star-node-stack-helper'
+
+// Create a Pino logger instance
+const pinoLogger = new PinoLogger({
+  level: 'debug',
+  service: 'my-service',
+  environment: 'development',
+  pretty: true, // Pretty print for development
+  redact: ['password', 'token', 'secret'], // Sensitive fields to redact
+})
+
+// Basic logging
+pinoLogger.info('Application started')
+pinoLogger.debug('Debug information', { userId: 123, action: 'login' })
+pinoLogger.warn('Warning message', { warning: 'Rate limit approaching' })
+pinoLogger.error('Error occurred', new Error('Something went wrong'))
+```
+
+### Specialized Logging Methods
+
+```typescript
+// Business events
+pinoLogger.business('user_registration', {
+  userId: 456,
+  email: 'user@example.com',
+  plan: 'premium',
+})
+
+// Security events
+pinoLogger.security('failed_login_attempt', {
+  email: 'user@example.com',
+  ip: '192.168.1.100',
+  reason: 'invalid_password',
+})
+
+// Performance metrics
+pinoLogger.performance('database_query', 150, {
+  query: 'SELECT * FROM users',
+  rowsReturned: 1000,
+})
+
+// Transaction tracking
+const transactionId = 'txn_' + Date.now()
+pinoLogger.transaction(transactionId, 'order_creation', {
+  userId: 456,
+  total: 99.99,
+})
+
+// System events
+pinoLogger.system('service_startup', {
+  version: '1.0.0',
+  port: 3000,
+  environment: 'development',
+})
+```
+
+### Child Loggers
+
+```typescript
+// Create a child logger with additional context
+const userLogger = pinoLogger.child({ userId: 789, sessionId: 'sess_123' })
+userLogger.info('User logged in')
+userLogger.business('profile_update', { fields: ['name', 'email'] })
+```
+
+### Global Logger
+
+```typescript
+// Initialize global logger
+const pinoConfig = getPinoConfig('development')
+pinoConfig.service = 'my-service'
+const globalLogger = initializePinoLogger(pinoConfig)
+
+// Use global logger anywhere
+import { getPinoLogger } from '@starbemtech/star-node-stack-helper'
+const logger = getPinoLogger()
+logger.info('Using global logger')
+```
+
+### Integration with LoggerFactory
+
+The Pino logger is automatically initialized when using `LoggerFactory`:
+
+```typescript
+const result = await LoggerFactory.initialize(config)
+if (result.success) {
+  // Pino logger is available for local logging
+  const pinoLogger = result.pinoLogger
+  pinoLogger.info('System initialized with both OpenSearch and Pino logging')
+}
+```
+
+### Examples
+
+Check the `examples/` directory for complete examples:
+
+- `basic-usage.ts` - Basic logging examples including Pino logger
+- `pino-usage.ts` - Comprehensive Pino logger examples
+- `express-integration.ts` - Complete Express.js integration example
+- `generic-usage.ts` - Generic usage examples for any domain
+
+## Migration Guide
+
+### From v1.x to v2.x
+
+The new logging system is backward compatible with the existing `ElasticLogger`. To migrate:
+
+1. **Update imports**:
+
+   ```typescript
+   // Old
+   import { ElasticLogger } from '@starbemtech/star-node-stack-helper'
+
+   // New
+   import {
+     initializeLogger,
+     getSystemLogger,
+   } from '@starbemtech/star-node-stack-helper'
+   ```
+
+2. **Initialize the new system**:
+
+   ```typescript
+   // Initialize once in your application
+   await initializeLogger('my-service', 'production')
+   ```
+
+3. **Use the new logging functions**:
+
+   ```typescript
+   // Old
+   const logger = new ElasticLogger(config)
+   await logger.log('info', 'message')
+
+   // New
+   await logInfo('message', { context: 'data' })
+   ```
+
+4. **Add middleware to routes**:
+   ```typescript
+   app.get(
+     '/api/endpoint',
+     addTransactionId,
+     transactionLogger('operation_name'),
+     controller
+   )
+   ```
 
 ## Author
 
