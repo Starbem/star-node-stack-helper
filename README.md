@@ -17,11 +17,11 @@ A helper library for Node.js applications that provides utilities for AWS Secret
 ## Installation
 
 ```bash
-npm install star-node-stack-helper
+npm install @starbemtech/star-node-stack-helper
 # or
-yarn add star-node-stack-helper
+yarn add @starbemtech/star-node-stack-helper
 # or
-pnpm add star-node-stack-helper
+pnpm add @starbemtech/star-node-stack-helper
 ```
 
 ## Usage
