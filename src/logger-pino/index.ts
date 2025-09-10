@@ -63,7 +63,7 @@ export const createHttpLogger = (
     customSuccessMessage?: (req: Request, res: Response) => string
     customErrorMessage?: (req: Request, res: Response, err?: Error) => string
   }
-) => {
+): any => {
   const defaultSilentRoutes = [
     '/healthz',
     '/health',
