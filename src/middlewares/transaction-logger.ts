@@ -2,6 +2,15 @@ import { ElasticLogger } from '../logger'
 import { LogTransaction } from '../logger/types'
 import { Request, Response, NextFunction } from 'express'
 
+// Extend Express Request interface
+declare global {
+  namespace Express {
+    interface Request {
+      transactionId?: string
+    }
+  }
+}
+
 export const transactionLoggerMiddleware = (
   microservice: string,
   operation: string,
@@ -124,11 +133,4 @@ export const addTransactionId = (
   res.setHeader('X-Transaction-ID', req.transactionId)
 
   next()
-}
-
-// Extend Express Request interface
-declare module 'express-serve-static-core' {
-  interface Request {
-    transactionId?: string
-  }
 }
