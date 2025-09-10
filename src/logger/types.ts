@@ -13,16 +13,29 @@ export type LogLevel = 'info' | 'warn' | 'error' | 'debug'
 
 export interface LogTransaction {
   name: string
+  microservice: string
+  transactionId?: string
+  userId?: string
+  appointmentId?: string
+  platform?: string
+  operation: string
   status: 'success' | 'fail'
   duration: number
-  context?: Record<string, unknown>
+  context?: Record<string, any>
   requestMeta?: {
     method: string
     path: string
-    ip?: string
+    ip?: string | undefined
+    userAgent?: string | undefined
+  }
+  responseMeta?: {
+    statusCode: number
+    responseSize?: number
   }
   error?: {
     message: string
+    code?: string
+    stack?: string
   }
 }
 

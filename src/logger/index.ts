@@ -35,7 +35,7 @@ export class ElasticLogger {
     }
 
     if (config.authType === 'aws' || (!config.username && !config.password)) {
-      // Use AWS SigV4 authentication
+      console.info('Using AWS SigV4 authentication')
       Object.assign(
         clientConfig,
         AwsSigv4Signer({
@@ -48,7 +48,7 @@ export class ElasticLogger {
         })
       )
     } else if (config.username && config.password) {
-      // Use username/password authentication
+      console.info('Using username/password authentication')
       clientConfig.auth = {
         username: config.username,
         password: config.password,

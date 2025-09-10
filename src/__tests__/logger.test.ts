@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import { ElasticLogger } from '../logger'
 import { LoggerConfig, LogTransaction } from '../logger/types'
 
@@ -90,6 +91,8 @@ describe('ElasticLogger', () => {
     it('should log successful transaction', async () => {
       const transaction: LogTransaction = {
         name: 'test-transaction',
+        microservice: 'test-service',
+        operation: 'test-operation',
         status: 'success',
         duration: 100,
         context: { userId: '123' },
@@ -106,6 +109,8 @@ describe('ElasticLogger', () => {
     it('should log failed transaction with error', async () => {
       const transaction: LogTransaction = {
         name: 'test-transaction',
+        microservice: 'test-service',
+        operation: 'test-operation',
         status: 'fail',
         duration: 100,
         context: { userId: '123' },
@@ -136,6 +141,8 @@ describe('ElasticLogger', () => {
     it('should log transaction without optional fields', async () => {
       const transaction: LogTransaction = {
         name: 'simple-transaction',
+        microservice: 'test-service',
+        operation: 'simple-operation',
         status: 'success',
         duration: 50,
       }
