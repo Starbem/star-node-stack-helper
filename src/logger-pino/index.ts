@@ -1,6 +1,7 @@
 import pino from 'pino'
 import pinoHttp from 'pino-http'
 import { PinoLoggerConfig } from './types'
+import { Request, Response } from 'express'
 
 export const createPinoLogger = (config: PinoLoggerConfig) => {
   const baseConfig = {
@@ -10,8 +11,8 @@ export const createPinoLogger = (config: PinoLoggerConfig) => {
     formatters: {
       level:
         config.customFormatters?.level ||
-        ((label: string) => ({ level: label })),
-      log: config.customFormatters?.log || ((object: any) => object),
+        ((label: string) => ({ level: label }) as any),
+      log: config.customFormatters?.log || ((object: unknown) => object as any),
     },
     serializers: {
       req: config.customSerializers?.req || pino.stdSerializers.req,
@@ -58,9 +59,9 @@ export const createHttpLogger = (
   logger: pino.Logger,
   options?: {
     silentRoutes?: string[]
-    customLogLevel?: (req: Request, res: Response, err?: any) => string
+    customLogLevel?: (req: Request, res: Response, err?: Error) => string
     customSuccessMessage?: (req: Request, res: Response) => string
-    customErrorMessage?: (req: Request, res: Response, err?: any) => string
+    customErrorMessage?: (req: Request, res: Response, err?: Error) => string
   }
 ) => {
   const defaultSilentRoutes = [
@@ -76,7 +77,7 @@ export const createHttpLogger = (
     logger: logger as any,
     customLogLevel:
       options?.customLogLevel ||
-      ((req: any, res: any, err?: any) => {
+      ((req: Request, res: Response, err?: Error) => {
         if (err) return 'error'
 
         const silentRoutes = [
@@ -94,10 +95,11 @@ export const createHttpLogger = (
       }),
     customSuccessMessage:
       options?.customSuccessMessage ||
-      ((req: any, res: any) => `${req.method} ${req.url} - ${res.statusCode}`),
+      ((req: Request, res: Response) =>
+        `${req.method} ${req.url} - ${res.statusCode}`),
     customErrorMessage:
       options?.customErrorMessage ||
-      ((req: any, res: any, err?: any) =>
+      ((req: Request, res: Response, err?: Error) =>
         `${req.method} ${req.url} - ${res.statusCode} - ${err?.message || 'Unknown error'}`),
     customAttributeKeys: {
       req: 'request',
@@ -109,7 +111,7 @@ export const createHttpLogger = (
 }
 
 export const logContext = {
-  request: (req: any, additionalData?: any) => ({
+  request: (req: Request, additionalData?: Record<string, unknown>) => ({
     method: req.method,
     url: req.url,
     userAgent: req.get('User-Agent'),
@@ -117,14 +119,18 @@ export const logContext = {
     ...additionalData,
   }),
 
-  error: (error: any, context?: any) => ({
+  error: (error: Error, context?: Record<string, unknown>) => ({
     message: error.message,
     stack: error.stack,
-    code: error.code,
+    code: (error as Error & { code?: string }).code,
     ...context,
   }),
 
-  performance: (operation: string, duration: number, metadata?: any) => ({
+  performance: (
+    operation: string,
+    duration: number,
+    metadata?: Record<string, unknown>
+  ) => ({
     operation,
     duration,
     unit: 'ms',

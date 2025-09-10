@@ -21,7 +21,7 @@ export interface LogTransaction {
   operation: string
   status: 'success' | 'fail'
   duration: number
-  context?: Record<string, any>
+  context?: Record<string, unknown>
   requestMeta?: {
     method: string
     path: string

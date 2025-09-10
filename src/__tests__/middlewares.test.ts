@@ -9,14 +9,14 @@ interface Request {
   get: (header: string) => string | undefined
   headers: Record<string, string>
   params: Record<string, string>
-  query: Record<string, any>
-  body: Record<string, any>
+  query: Record<string, unknown>
+  body: Record<string, unknown>
   transactionId?: string
 }
 
 interface Response {
   statusCode: number
-  send: (data: any) => void
+  send: (data: unknown) => void
 }
 
 type NextFunction = () => void
@@ -92,11 +92,11 @@ describe('Middlewares', () => {
       // Mock the logger.info method
       const loggerSpy = jest.spyOn(console, 'log').mockImplementation()
 
-      middleware(mockReq as Request, mockRes as Response, mockNext)
+      middleware(mockReq as any, mockRes as any, mockNext)
 
       // Simulate response
       const originalSend = mockRes.send
-      mockRes.send = jest.fn((data: any) => {
+      mockRes.send = jest.fn((data: unknown) => {
         originalSend?.call(mockRes, data)
       })
 
@@ -160,11 +160,11 @@ describe('Middlewares', () => {
         .spyOn(elasticLogger, 'logTransaction')
         .mockResolvedValue()
 
-      middleware(mockReq as Request, mockRes as Response, mockNext)
+      middleware(mockReq as any, mockRes as any, mockNext)
 
       // Simulate response
       const originalSend = mockRes.send
-      mockRes.send = jest.fn((data: any) => {
+      mockRes.send = jest.fn((data: unknown) => {
         originalSend?.call(mockRes, data)
       })
 
@@ -214,11 +214,11 @@ describe('Middlewares', () => {
       // Set error status
       mockRes.statusCode = 500
 
-      middleware(mockReq as Request, mockRes as Response, mockNext)
+      middleware(mockReq as any, mockRes as any, mockNext)
 
       // Simulate response
       const originalSend = mockRes.send
-      mockRes.send = jest.fn((data: any) => {
+      mockRes.send = jest.fn((data: unknown) => {
         originalSend?.call(mockRes, data)
       })
 
@@ -263,11 +263,11 @@ describe('Middlewares', () => {
         .spyOn(elasticLogger, 'logTransaction')
         .mockResolvedValue()
 
-      middleware(mockReq as Request, mockRes as Response, mockNext)
+      middleware(mockReq as any, mockRes as any, mockNext)
 
       // Simulate response
       const originalSend = mockRes.send
-      mockRes.send = jest.fn((data: any) => {
+      mockRes.send = jest.fn((data: unknown) => {
         originalSend?.call(mockRes, data)
       })
 
@@ -312,11 +312,11 @@ describe('Middlewares', () => {
         .spyOn(elasticLogger, 'logTransaction')
         .mockResolvedValue()
 
-      middleware(mockReq as Request, mockRes as Response, mockNext)
+      middleware(mockReq as any, mockRes as any, mockNext)
 
       // Simulate response
       const originalSend = mockRes.send
-      mockRes.send = jest.fn((data: any) => {
+      mockRes.send = jest.fn((data: unknown) => {
         originalSend?.call(mockRes, data)
       })
 
@@ -341,7 +341,7 @@ describe('Middlewares', () => {
 
       // Should not throw
       expect(() => {
-        middleware(mockReq as Request, mockRes as Response, mockNext)
+        middleware(mockReq as any, mockRes as any, mockNext)
       }).not.toThrow()
 
       expect(mockNext).toHaveBeenCalled()

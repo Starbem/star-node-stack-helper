@@ -5,12 +5,12 @@ export interface PinoLoggerConfig {
   customSilentRoutes?: string[]
   customRedactPaths?: string[]
   customFormatters?: {
-    level?: (label: string) => any
-    log?: (object: any) => any
+    level?: (label: string) => unknown
+    log?: (object: unknown) => unknown
   }
   customSerializers?: {
-    req?: (req: any) => any
-    res?: (res: any) => any
-    err?: (err: any) => any
+    req?: (req: unknown) => unknown
+    res?: (res: unknown) => unknown
+    err?: (err: unknown) => unknown
   }
 }

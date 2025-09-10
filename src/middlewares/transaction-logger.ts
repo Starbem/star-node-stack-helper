@@ -1,12 +1,13 @@
 import { ElasticLogger } from '../logger'
 import { LogTransaction } from '../logger/types'
+import { Request, Response, NextFunction } from 'express'
 
 export const transactionLoggerMiddleware = (
   microservice: string,
   operation: string,
   elasticLogger: ElasticLogger | null
 ) => {
-  return (req: any, res: any, next: any) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     if (!elasticLogger) {
       return next()
     }
@@ -29,11 +30,11 @@ export const transactionLoggerMiddleware = (
     }
 
     const originalSend = res.send
-    res.send = function (data: any) {
+    res.send = function (data: unknown) {
       const duration = Date.now() - startTime
       const status = res.statusCode >= 400 ? 'fail' : 'success'
 
-      const context: Record<string, any> = {}
+      const context: Record<string, unknown> = {}
 
       if (req.params) {
         Object.assign(context, req.params)
@@ -84,7 +85,7 @@ export const transactionLoggerMiddleware = (
         requestMeta,
         responseMeta: {
           statusCode: res.statusCode,
-          responseSize: data?.length || 0,
+          responseSize: (data as string)?.length || 0,
         },
       }
 
@@ -108,7 +109,11 @@ export const transactionLoggerMiddleware = (
   }
 }
 
-export const addTransactionId = (req: any, res: any, next: any) => {
+export const addTransactionId = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   if (!req.transactionId) {
     req.transactionId =
       (req.headers['x-transaction-id'] as string) ||
@@ -121,10 +126,9 @@ export const addTransactionId = (req: any, res: any, next: any) => {
   next()
 }
 
-declare global {
-  namespace Express {
-    interface Request {
-      transactionId?: string
-    }
+// Extend Express Request interface
+declare module 'express-serve-static-core' {
+  interface Request {
+    transactionId?: string
   }
 }

@@ -1,6 +1,7 @@
 /// <reference types="jest" />
 import { createPinoLogger, createHttpLogger, logContext } from '../logger-pino'
 import { PinoLoggerConfig } from '../logger-pino/types'
+import pino from 'pino'
 
 describe('Pino Logger', () => {
   const mockConfig: PinoLoggerConfig = {
@@ -59,7 +60,10 @@ describe('Pino Logger', () => {
         ...mockConfig,
         customFormatters: {
           level: (label: string) => ({ level: label.toUpperCase() }),
-          log: (object: any) => ({ ...object, custom: true }),
+          log: (object: unknown) => ({
+            ...(object as Record<string, unknown>),
+            custom: true,
+          }),
         },
       }
 
@@ -72,9 +76,16 @@ describe('Pino Logger', () => {
       const config: PinoLoggerConfig = {
         ...mockConfig,
         customSerializers: {
-          req: (req: any) => ({ method: req.method, url: req.url }),
-          res: (res: any) => ({ statusCode: res.statusCode }),
-          err: (err: any) => ({ message: err.message }),
+          req: (req: unknown) => ({
+            method: (req as { method: string; url: string }).method,
+            url: (req as { method: string; url: string }).url,
+          }),
+          res: (res: unknown) => ({
+            statusCode: (res as { statusCode: number }).statusCode,
+          }),
+          err: (err: unknown) => ({
+            message: (err as { message: string }).message,
+          }),
         },
       }
 
@@ -97,7 +108,7 @@ describe('Pino Logger', () => {
   })
 
   describe('createHttpLogger', () => {
-    let logger: any
+    let logger: pino.Logger
 
     beforeEach(() => {
       logger = createPinoLogger(mockConfig)
@@ -113,14 +124,14 @@ describe('Pino Logger', () => {
     it('should create HTTP logger with custom options', () => {
       const options = {
         silentRoutes: ['/health', '/metrics'],
-        customLogLevel: (_req: any, res: any, err?: any) => {
+        customLogLevel: (_req: any, res: any, err?: Error) => {
           if (err) return 'error'
           if (res.statusCode >= 400) return 'warn'
           return 'info'
         },
         customSuccessMessage: (req: any, res: any) =>
           `${req.method} ${req.url} - ${res.statusCode}`,
-        customErrorMessage: (req: any, res: any, err?: any) =>
+        customErrorMessage: (req: any, res: any, err?: Error) =>
           `${req.method} ${req.url} - ${res.statusCode} - ${err?.message}`,
       }
 
@@ -146,7 +157,7 @@ describe('Pino Logger', () => {
 
     describe('request', () => {
       it('should create request context', () => {
-        const context = logContext.request(mockReq)
+        const context = logContext.request(mockReq as any)
 
         expect(context).toEqual({
           method: 'GET',
@@ -158,7 +169,7 @@ describe('Pino Logger', () => {
 
       it('should create request context with additional data', () => {
         const additionalData = { userId: '123', sessionId: 'sess-456' }
-        const context = logContext.request(mockReq, additionalData)
+        const context = logContext.request(mockReq as any, additionalData)
 
         expect(context).toEqual({
           method: 'GET',
@@ -172,7 +183,7 @@ describe('Pino Logger', () => {
 
       it('should handle missing User-Agent', () => {
         const reqWithoutUA = { ...mockReq, get: jest.fn(() => undefined) }
-        const context = logContext.request(reqWithoutUA)
+        const context = logContext.request(reqWithoutUA as any)
 
         expect(context).toEqual({
           method: 'GET',
@@ -209,7 +220,7 @@ describe('Pino Logger', () => {
 
       it('should handle error with code', () => {
         const errorWithCode = new Error('Test error')
-        ;(errorWithCode as any).code = 'TEST_ERROR'
+        ;(errorWithCode as Error & { code: string }).code = 'TEST_ERROR'
         errorWithCode.stack = 'Error: Test error\n    at test.js:1:1'
 
         const context = logContext.error(errorWithCode)
@@ -259,7 +270,7 @@ describe('Pino Logger', () => {
   })
 
   describe('Logger functionality', () => {
-    let logger: any
+    let logger: pino.Logger
 
     beforeEach(() => {
       logger = createPinoLogger(mockConfig)
@@ -284,7 +295,7 @@ describe('Pino Logger', () => {
 
       // Test that structured logging doesn't throw
       expect(() => {
-        logger.info('User action', structuredData)
+        logger.info('User action', structuredData as any)
       }).not.toThrow()
     })
 
@@ -294,7 +305,7 @@ describe('Pino Logger', () => {
 
       // Test that error logging doesn't throw
       expect(() => {
-        logger.error('Operation failed', { error, ...context })
+        logger.error('Operation failed', { error, ...context } as any)
       }).not.toThrow()
     })
   })
