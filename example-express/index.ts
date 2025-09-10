@@ -12,22 +12,23 @@ import {
 } from '../src'
 
 /**
- * Exemplos de uso da lib star-node-stack-helper
+ * Examples of usage for the star-node-stack-helper library
  *
- * Endpoints disponíveis:
- * - /pino-logs/basic - Exemplo básico de logs com pinoLogger
- * - /pino-logs/context - Exemplo usando pinoLogContext para estruturar logs
- * - /pino-logs/advanced - Exemplo avançado com diferentes níveis e contextos
- * - /performance-test - Exemplo de performance logger middleware
- * - /performance-test/slow - Exemplo de operação lenta com performance logger
- * - /system-logs/add - Exemplo de system logs com ElasticLogger
- * - /transaction-logs/add - Exemplo de transaction logs com middleware
- * - /transaction-logs/create-user - POST - Criar usuário com transaction logger
- * - /transaction-logs/update-user/:id - PUT - Atualizar usuário com transaction logger
- * - /transaction-logs/delete-user/:id - DELETE - Deletar usuário com transaction logger
- * - /system-logs - Buscar system logs
- * - /transaction-logs - Buscar transaction logs com middleware
- * - /secrets - Exemplo de carregamento de secrets
+ * Available endpoints:
+ * - /pino-logs/basic - Basic example of logs with pinoLogger
+ * - /pino-logs/context - Example using pinoLogContext to structure logs
+ * - /pino-logs/advanced - Advanced example with different levels and contexts
+ * - /pino-logs/proxy - Example of proxy/API Gateway log
+ * - /performance-test - Example of performance logger middleware
+ * - /performance-test/slow - Example of slow operation with performance logger
+ * - /system-logs/add - Example of system logs with ElasticLogger
+ * - /transaction-logs/add - Example of transaction logs with middleware
+ * - /transaction-logs/create-user - POST - Create user with transaction logger
+ * - /transaction-logs/update-user/:id - PUT - Update user with transaction logger
+ * - /transaction-logs/delete-user/:id - DELETE - Delete user with transaction logger
+ * - /system-logs - Search system logs
+ * - /transaction-logs - Search transaction logs with middleware
+ * - /secrets - Example of loading secrets
  */
 
 const loggerConfig: LoggerConfig = {
@@ -44,7 +45,7 @@ const loggerConfig: LoggerConfig = {
 // TODO: Add logger config example
 const logger = new ElasticLogger(loggerConfig)
 const pinoLogger = createPinoLogger({
-  serviceName: 'video-ms',
+  serviceName: 'star-node-stack-helper-example',
   environment: 'development',
   logLevel: 'info',
 })
@@ -58,47 +59,47 @@ app.use(httpLogger)
 // TODO: Add pino logger examples
 app.get('/pino-logs/basic', async (req, res) => {
   // Exemplo básico de uso do pinoLogger
-  pinoLogger.info('Log básico de informação', {
+  pinoLogger.info('Basic information log', {
     userId: '123',
     action: 'user_login',
     timestamp: new Date().toISOString(),
   })
 
-  pinoLogger.warn('Log de aviso', {
+  pinoLogger.warn('Warning log', {
     message: 'Usuário tentou acessar recurso sem permissão',
     userId: '123',
     resource: '/admin/users',
   })
 
-  pinoLogger.error('Log de erro', {
+  pinoLogger.error('Error log', {
     message: 'Falha ao conectar com banco de dados',
     error: 'Connection timeout',
     retryCount: 3,
   })
 
   res.json({
-    message: 'Logs pino criados com sucesso',
+    message: 'Logs pino created successfully',
     logs: ['info', 'warn', 'error'],
   })
 })
 
 app.get('/pino-logs/context', async (req, res) => {
-  // Exemplo usando pinoLogContext para estruturar logs
+  // Example using pinoLogContext to structure logs
   const requestContext = pinoLogContext.request(req, {
     userId: '456',
     sessionId: 'sess_789',
   })
 
-  pinoLogger.info('Ação do usuário executada', {
+  pinoLogger.info('User action executed', {
     ...requestContext,
     action: 'create_video_room',
     roomId: 'room_123',
     participants: 5,
   })
 
-  // Exemplo de log de performance
+  // Example of performance log
   const startTime = Date.now()
-  // Simular operação
+  // Simulate operation
   await new Promise((resolve) => setTimeout(resolve, 100))
   const duration = Date.now() - startTime
 
@@ -111,25 +112,25 @@ app.get('/pino-logs/context', async (req, res) => {
     }
   )
 
-  pinoLogger.info('Operação concluída com sucesso', {
+  pinoLogger.info('Operation completed successfully', {
     ...requestContext,
     ...performanceContext,
     success: true,
   })
 
   res.json({
-    message: 'Logs com contexto criados com sucesso',
+    message: 'Logs with context created successfully',
     duration: `${duration}ms`,
   })
 })
 
 app.get('/pino-logs/advanced', async (req, res) => {
-  // Exemplo avançado com diferentes níveis de log
+  // Example of advanced with different log levels
   const userId = (req.query.userId as string) || 'anonymous'
   const operation = 'advanced_operation'
 
-  // Log de início da operação
-  pinoLogger.info('Iniciando operação avançada', {
+  // Log of start of the operation
+  pinoLogger.info('Starting advanced operation', {
     ...pinoLogContext.request(req, { userId, operation }),
     step: 'start',
     metadata: {
@@ -139,18 +140,18 @@ app.get('/pino-logs/advanced', async (req, res) => {
   })
 
   try {
-    // Simular diferentes etapas da operação
+    // Simulate different steps of the operation
     const steps = ['validation', 'processing', 'database', 'response']
 
     for (const step of steps) {
       const stepStart = Date.now()
 
-      // Simular trabalho da etapa
+      // Simulate step work
       await new Promise((resolve) => setTimeout(resolve, 50))
 
       const stepDuration = Date.now() - stepStart
 
-      pinoLogger.debug(`Etapa ${step} concluída`, {
+      pinoLogger.debug(`Step ${step} completed`, {
         ...pinoLogContext.performance(step, stepDuration),
         userId,
         operation,
@@ -159,8 +160,8 @@ app.get('/pino-logs/advanced', async (req, res) => {
       })
     }
 
-    // Log de sucesso
-    pinoLogger.info('Operação avançada concluída com sucesso', {
+    // Log of success
+    pinoLogger.info('Advanced operation completed successfully', {
       ...pinoLogContext.request(req, { userId, operation }),
       ...pinoLogContext.performance(operation, 200), // 200ms total
       result: 'success',
@@ -168,14 +169,14 @@ app.get('/pino-logs/advanced', async (req, res) => {
     })
 
     res.json({
-      message: 'Operação avançada concluída',
+      message: 'Advanced operation completed',
       userId,
       steps: steps.length,
       totalDuration: '200ms',
     })
   } catch (error) {
-    // Log de erro com contexto completo
-    pinoLogger.error('Erro na operação avançada', {
+    // Log of error with complete context
+    pinoLogger.error('Error in advanced operation', {
       ...pinoLogContext.request(req, { userId, operation }),
       ...pinoLogContext.error(error, {
         step: 'processing',
@@ -185,10 +186,41 @@ app.get('/pino-logs/advanced', async (req, res) => {
     })
 
     res.status(500).json({
-      message: 'Erro na operação avançada',
+      message: 'Error in advanced operation',
       error: error instanceof Error ? error.message : 'Unknown error',
     })
   }
+})
+
+app.get('/pino-logs/proxy', async (req, res) => {
+  // Example of proxy/API Gateway log
+  const target = 'https://api.example.com'
+  const service = 'user-service'
+  const startTime = Date.now()
+
+  // Simulate external API call
+  await new Promise((resolve) => setTimeout(resolve, 150))
+  const responseTime = Date.now() - startTime
+
+  const proxyContext = pinoLogContext.proxy(target, service, {
+    method: 'GET',
+    endpoint: '/users/123',
+    responseTime,
+    statusCode: 200,
+  })
+
+  pinoLogger.info('API Gateway request completed', {
+    ...proxyContext,
+    ...pinoLogContext.request(req),
+    success: true,
+  })
+
+  res.json({
+    message: 'Proxy log example completed',
+    target,
+    service,
+    responseTime: `${responseTime}ms`,
+  })
 })
 
 // TODO: Add performance logger example
@@ -196,11 +228,11 @@ app.get(
   '/performance-test',
   performanceLoggerMiddleware('video-ms', 'performance_test', 'development'),
   async (req, res) => {
-    // Simular operação que demora um pouco
+    // Simulate operation that takes a little bit
     await new Promise((resolve) => setTimeout(resolve, Math.random() * 1000))
 
     res.json({
-      message: 'Operação de performance test concluída',
+      message: 'Performance test operation completed',
       timestamp: new Date().toISOString(),
       randomDelay: '0-1000ms',
     })
@@ -211,11 +243,11 @@ app.get(
   '/performance-test/slow',
   performanceLoggerMiddleware('video-ms', 'slow_operation', 'development'),
   async (req, res) => {
-    // Simular operação lenta
+    // Simulate slow operation
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
     res.json({
-      message: 'Operação lenta concluída',
+      message: 'Slow operation completed',
       duration: '2000ms',
       timestamp: new Date().toISOString(),
     })
@@ -262,8 +294,8 @@ app.get(
   '/transaction-logs/add',
   transactionLoggerMiddleware('video-ms', 'create-transaction-log', logger),
   async (req, res) => {
-    // O middleware já captura automaticamente os dados da transação
-    // Aqui você pode adicionar lógica específica da operação
+    // The middleware automatically captures the transaction data
+    // Here you can add specific logic for the operation
 
     const body = {
       microservice: 'video-ms',
@@ -288,13 +320,13 @@ app.get(
       },
     }
 
-    // Simular processamento
+    // Simulate processing
     await new Promise((resolve) => setTimeout(resolve, 100))
 
     res.json({
-      message: 'Log transaction saved successfully',
+      message: 'Transaction log saved successfully',
       body,
-      transactionId: req.transactionId, // ID gerado pelo middleware
+      transactionId: req.transactionId, // ID generated by the middleware
     })
   }
 )
@@ -307,7 +339,7 @@ app.post(
     try {
       const { name, email, role } = req.body
 
-      // Simular validação
+      // Simulate validation
       if (!name || !email) {
         res.status(400).json({
           message: 'Name and email are required',
@@ -316,7 +348,7 @@ app.post(
         return
       }
 
-      // Simular criação de usuário
+      // Simulate user creation process
       await new Promise((resolve) => setTimeout(resolve, 300))
 
       const user = {
@@ -350,10 +382,10 @@ app.put(
       const { id } = req.params
       const { name, email, role } = req.body
 
-      // Simular busca do usuário
+      // Simulate user search
       await new Promise((resolve) => setTimeout(resolve, 150))
 
-      // Simular atualização
+      // Simulate update
       await new Promise((resolve) => setTimeout(resolve, 200))
 
       const updatedUser = {
@@ -386,10 +418,10 @@ app.delete(
     try {
       const { id } = req.params
 
-      // Simular verificação se usuário existe
+      // Simulate user existence check
       await new Promise((resolve) => setTimeout(resolve, 100))
 
-      // Simular exclusão
+      // Simulate deletion
       await new Promise((resolve) => setTimeout(resolve, 250))
 
       res.json({
@@ -424,14 +456,14 @@ app.get(
     const query = req.query as { q: string }
     console.log('query', query)
 
-    // Simular busca com delay
+    // Simulate search with delay
     await new Promise((resolve) => setTimeout(resolve, 200))
 
     const transactions = await logger.getLogsTransactions(query.q)
     res.json({
       message: 'Transactions fetched successfully',
       transactions,
-      transactionId: req.transactionId, // ID gerado pelo middleware
+      transactionId: req.transactionId, // ID generated by the middleware
       searchQuery: query.q,
     })
   }

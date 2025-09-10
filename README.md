@@ -277,6 +277,19 @@ logger.info('Operation completed', {
   success: true,
 })
 
+// Proxy/API Gateway logging
+const proxyContext = pinoLogContext.proxy(
+  'https://api.example.com',
+  'user-service',
+  {
+    method: 'GET',
+    endpoint: '/users/123',
+    responseTime: 150,
+  }
+)
+
+logger.info('API Gateway request', proxyContext)
+
 // Error logging
 try {
   // ... risky operation
@@ -1185,6 +1198,47 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🆘 Support
 
 For support, email support@starbem.app or create an issue in the GitHub repository.
+
+## 📚 API Reference
+
+### Pino Logger
+
+#### `createPinoLogger(config: PinoLoggerConfig): pino.Logger`
+
+Creates a configured Pino logger instance with optimized settings for development and production.
+
+**Parameters:**
+
+- `config.serviceName`: Name of the service
+- `config.environment`: Environment ('development' | 'production')
+- `config.logLevel`: Log level ('trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal')
+
+#### `createHttpLogger(logger: pino.Logger): HttpLogger`
+
+Creates an Express HTTP logging middleware with optimized settings.
+
+**Features:**
+
+- Automatic silent routes for health checks and metrics
+- Smart log levels based on status codes
+- Request/response serialization
+- Performance tracking
+
+#### `pinoLogContext.request(req: Request, additionalData?: any): object`
+
+Creates request context for logging.
+
+#### `pinoLogContext.error(error: Error, context?: any): object`
+
+Creates error context for logging.
+
+#### `pinoLogContext.performance(operation: string, duration: number, metadata?: any): object`
+
+Creates performance context for logging.
+
+#### `pinoLogContext.proxy(target: string, service: string, metadata?: any): object`
+
+Creates proxy/API Gateway context for logging.
 
 ## 🔗 Links
 

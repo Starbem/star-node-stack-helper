@@ -1,107 +1,99 @@
 import pino from 'pino'
 import pinoHttp from 'pino-http'
 import { PinoLoggerConfig } from './types'
-import { Request, Response } from 'express'
 
-export const createPinoLogger = (config: PinoLoggerConfig): any => {
-  const baseConfig = {
-    name: config.serviceName,
-    level: config.logLevel || 'info',
-    timestamp: pino.stdTimeFunctions.isoTime,
-    formatters: {
-      level:
-        config.customFormatters?.level ||
-        ((label: string) => ({ level: label }) as any),
-      log: config.customFormatters?.log || ((object: unknown) => object as any),
+const baseConfig = {
+  timestamp: pino.stdTimeFunctions.isoTime,
+  formatters: {
+    level: (label: string) => {
+      return { level: label }
     },
-    serializers: {
-      req: config.customSerializers?.req || pino.stdSerializers.req,
-      res: config.customSerializers?.res || pino.stdSerializers.res,
-      err: config.customSerializers?.err || pino.stdSerializers.err,
+    log: (object: Record<string, unknown>) => {
+      return object
     },
-  }
-
-  const devConfig = {
-    ...baseConfig,
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        levelFirst: true,
-        translateTime: 'SYS:standard',
-        ignore: 'pid,hostname',
-        messageFormat: '{msg} {req.method} {req.url} {res.statusCode}',
-      },
-    },
-  }
-
-  const prodConfig = {
-    ...baseConfig,
-    redact: {
-      paths: [
-        'req.headers.authorization',
-        'req.headers.cookie',
-        'req.body.password',
-        'req.body.token',
-        'res.headers["set-cookie"]',
-        ...(config.customRedactPaths || []),
-      ],
-      remove: true,
-    },
-  }
-
-  const loggerConfig =
-    config.environment === 'production' ? prodConfig : devConfig
-
-  return pino(loggerConfig)
+  },
+  serializers: {
+    req: pino.stdSerializers.req,
+    res: pino.stdSerializers.res,
+    err: pino.stdSerializers.err,
+  },
 }
 
-export const createHttpLogger = (
-  logger: any,
-  options?: {
-    silentRoutes?: string[]
-    customLogLevel?: (req: Request, res: Response, err?: Error) => string
-    customSuccessMessage?: (req: Request, res: Response) => string
-    customErrorMessage?: (req: Request, res: Response, err?: Error) => string
-  }
-): any => {
-  const defaultSilentRoutes = [
-    '/healthz',
-    '/health',
-    '/ready',
-    '/live',
-    '/metrics',
-    '/favicon.ico',
-  ]
+const devConfig = {
+  ...baseConfig,
+  transport: {
+    target: 'pino-pretty',
+    options: {
+      colorize: true,
+      levelFirst: true,
+      translateTime: 'SYS:standard',
+      ignore: 'pid,hostname',
+      messageFormat: '{msg} {req.method} {req.url} {res.statusCode}',
+    },
+  },
+}
 
+const prodConfig = {
+  ...baseConfig,
+  redact: {
+    paths: [
+      'req.headers.authorization',
+      'req.headers.cookie',
+      'req.body.password',
+      'req.body.token',
+      'req.body.secret',
+      'res.headers["set-cookie"]',
+    ],
+    remove: true,
+  },
+}
+
+export const createPinoLogger = (config: PinoLoggerConfig) => {
+  const loggerConfig =
+    config.environment === 'production'
+      ? { ...prodConfig, name: config.serviceName, level: config.logLevel }
+      : { ...devConfig, name: config.serviceName, level: config.logLevel }
+  return pino(loggerConfig as pino.LoggerOptions)
+}
+
+const silentRoutes = [
+  '/healthz',
+  '/health',
+  '/ready',
+  '/live',
+  '/ping',
+  '/metrics',
+  '/favicon.ico',
+  '/robots.txt',
+]
+
+export const createHttpLogger = (logger: pino.Logger) => {
   return pinoHttp({
-    logger: logger as any,
-    customLogLevel:
-      options?.customLogLevel ||
-      ((req: Request, res: Response, err?: Error) => {
-        if (err) return 'error'
+    logger,
+    customLogLevel: (req: any, res: any, err?: any) => {
+      if (err) return 'error'
 
-        const silentRoutes = [
-          ...defaultSilentRoutes,
-          ...(options?.silentRoutes || []),
-        ]
-        if (silentRoutes.includes(req.url)) {
-          if (res.statusCode >= 400) return 'warn'
-          return 'silent'
-        }
+      if (silentRoutes.includes(req.url)) {
+        if (res.statusCode >= 400) return 'warn'
+        return 'silent'
+      }
 
-        if (res.statusCode >= 400 && res.statusCode < 500) return 'warn'
-        if (res.statusCode >= 500) return 'error'
-        return 'info'
-      }),
-    customSuccessMessage:
-      options?.customSuccessMessage ||
-      ((req: Request, res: Response) =>
-        `${req.method} ${req.url} - ${res.statusCode}`),
-    customErrorMessage:
-      options?.customErrorMessage ||
-      ((req: Request, res: Response, err?: Error) =>
-        `${req.method} ${req.url} - ${res.statusCode} - ${err?.message || 'Unknown error'}`),
+      if (res.statusCode >= 400 && res.statusCode < 500) {
+        return 'warn'
+      }
+      if (res.statusCode >= 500) {
+        return 'error'
+      }
+      return 'info'
+    },
+    customSuccessMessage: (req: any, res: any) => {
+      return `${req.method} ${req.url} - ${res.statusCode}`
+    },
+    customErrorMessage: (req: any, res: any, err?: any) => {
+      return `${req.method} ${req.url} - ${res.statusCode} - ${
+        err?.message || 'Unknown error'
+      }`
+    },
     customAttributeKeys: {
       req: 'request',
       res: 'response',
@@ -112,29 +104,33 @@ export const createHttpLogger = (
 }
 
 export const logContext = {
-  request: (req: Request, additionalData?: Record<string, unknown>) => ({
+  request: (req: any, additionalData?: any) => ({
     method: req.method,
     url: req.url,
     userAgent: req.get('User-Agent'),
     ip: req.ip,
+    xForwardedFor: req.get('X-Forwarded-For'),
     ...additionalData,
   }),
 
-  error: (error: Error, context?: Record<string, unknown>) => ({
+  error: (error: any, context?: any) => ({
     message: error.message,
     stack: error.stack,
-    code: (error as Error & { code?: string }).code,
+    code: error.code,
     ...context,
   }),
 
-  performance: (
-    operation: string,
-    duration: number,
-    metadata?: Record<string, unknown>
-  ) => ({
+  performance: (operation: string, duration: number, metadata?: any) => ({
     operation,
     duration,
     unit: 'ms',
+    ...metadata,
+  }),
+
+  proxy: (target: string, service: string, metadata?: any) => ({
+    target,
+    service,
+    type: 'proxy',
     ...metadata,
   }),
 }

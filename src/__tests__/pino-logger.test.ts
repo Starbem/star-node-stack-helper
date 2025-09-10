@@ -122,20 +122,7 @@ describe('Pino Logger', () => {
     })
 
     it('should create HTTP logger with custom options', () => {
-      const options = {
-        silentRoutes: ['/health', '/metrics'],
-        customLogLevel: (_req: any, res: any, err?: Error) => {
-          if (err) return 'error'
-          if (res.statusCode >= 400) return 'warn'
-          return 'info'
-        },
-        customSuccessMessage: (req: any, res: any) =>
-          `${req.method} ${req.url} - ${res.statusCode}`,
-        customErrorMessage: (req: any, res: any, err?: Error) =>
-          `${req.method} ${req.url} - ${res.statusCode} - ${err?.message}`,
-      }
-
-      const httpLogger = createHttpLogger(logger, options)
+      const httpLogger = createHttpLogger(logger)
 
       expect(httpLogger).toBeDefined()
     })
