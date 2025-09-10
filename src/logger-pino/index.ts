@@ -3,7 +3,7 @@ import pinoHttp from 'pino-http'
 import { PinoLoggerConfig } from './types'
 import { Request, Response } from 'express'
 
-export const createPinoLogger = (config: PinoLoggerConfig) => {
+export const createPinoLogger = (config: PinoLoggerConfig): pino.Logger => {
   const baseConfig = {
     name: config.serviceName,
     level: config.logLevel || 'info',
@@ -52,6 +52,7 @@ export const createPinoLogger = (config: PinoLoggerConfig) => {
 
   const loggerConfig =
     config.environment === 'production' ? prodConfig : devConfig
+
   return pino(loggerConfig)
 }
 
