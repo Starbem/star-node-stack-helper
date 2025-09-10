@@ -58,9 +58,9 @@ export const createHttpLogger = (
   logger: pino.Logger,
   options?: {
     silentRoutes?: string[]
-    customLogLevel?: (req: any, res: any, err?: any) => string
-    customSuccessMessage?: (req: any, res: any) => string
-    customErrorMessage?: (req: any, res: any, err?: any) => string
+    customLogLevel?: (req: Request, res: Response, err?: any) => string
+    customSuccessMessage?: (req: Request, res: Response) => string
+    customErrorMessage?: (req: Request, res: Response, err?: any) => string
   }
 ) => {
   const defaultSilentRoutes = [

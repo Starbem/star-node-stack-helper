@@ -11,8 +11,6 @@ export const transactionLoggerMiddleware = (
       return next()
     }
 
-    console.log('transactionLoggerMiddleware', microservice, operation)
-
     const startTime = Date.now()
     const transactionId =
       (req.headers['x-transaction-id'] as string) ||
