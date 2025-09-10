@@ -1,12 +1,13 @@
 # Star Node Stack Helper
 
-A comprehensive helper library for Node.js applications that provides enterprise-grade utilities for AWS Secrets Manager integration, Elasticsearch/OpenSearch logging, and Express.js middleware with advanced features.
+A comprehensive helper library for Node.js applications that provides enterprise-grade utilities for AWS Secrets Manager integration, Elasticsearch/OpenSearch logging, Express.js middleware, and NestJS integration with advanced features.
 
 ## 🚀 Features
 
 - **AWS Secrets Manager Integration**: Secure secret loading with retry logic and IAM role support
 - **Elasticsearch/OpenSearch Logging**: Enterprise-grade logging with transaction tracking
 - **Pino Logger Integration**: High-performance structured logging
+- **NestJS Compatibility**: Native integration with decorators, interceptors, guards, and exception filters
 - **Express Middleware**: Performance monitoring and transaction logging
 - **TypeScript Support**: Full type safety and IntelliSense support
 - **AWS IAM Integration**: Seamless authentication with AWS services
@@ -31,6 +32,7 @@ yarn add @starbemtech/star-node-stack-helper
 - [AWS Secrets Manager](#aws-secrets-manager)
 - [Elasticsearch/OpenSearch Logging](#elasticsearchopensearch-logging)
 - [Pino Logger](#pino-logger)
+- [NestJS Compatibility](#nestjs-compatibility)
 - [Express Middleware](#express-middleware)
 - [TypeScript Types](#typescript-types)
 - [Examples](#examples)
@@ -309,6 +311,341 @@ const logger = createPinoLogger({
     err: (err) => ({ message: err.message, stack: err.stack }),
   },
   redactPaths: ['password', 'token', 'secret'],
+})
+```
+
+## 🚀 NestJS Compatibility
+
+A biblioteca é totalmente compatível com NestJS, oferecendo decorators, interceptors, guards e exception filters para integração nativa com o framework.
+
+### Instalação para NestJS
+
+```bash
+npm install @starbemtech/star-node-stack-helper @nestjs/common @nestjs/core rxjs
+# ou
+pnpm add @starbemtech/star-node-stack-helper @nestjs/common @nestjs/core rxjs
+```
+
+### Configuração Básica
+
+```typescript
+import { Module } from '@nestjs/common'
+import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core'
+import {
+  ElasticLogger,
+  LoggerConfig,
+  TransactionLogInterceptor,
+  LogExceptionFilter,
+} from '@starbemtech/star-node-stack-helper'
+
+const elasticConfig: LoggerConfig = {
+  node: 'https://your-opensearch-endpoint.com',
+  service: 'my-service',
+  environment: 'development',
+  index: 'transaction-logs',
+  region: 'us-east-1',
+  authType: 'aws',
+}
+
+const elasticLogger = new ElasticLogger(elasticConfig)
+
+@Module({
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useValue: new TransactionLogInterceptor({
+        microservice: 'my-service',
+        operation: 'api-request',
+        elasticLogger,
+      }),
+    },
+    {
+      provide: APP_FILTER,
+      useClass: LogExceptionFilter,
+    },
+  ],
+})
+export class AppModule {}
+```
+
+### Decorators de Logging
+
+#### @Log - Logging Básico
+
+```typescript
+import { Controller, Get, Post, Body } from '@nestjs/common'
+import {
+  Log,
+  LogPerformance,
+  LogError,
+  LogCritical,
+} from '@starbemtech/star-node-stack-helper'
+
+@Controller('users')
+export class UsersController {
+  @Get()
+  @Log('info', 'Fetching all users')
+  async getUsers() {
+    return [{ id: 1, name: 'João' }]
+  }
+
+  @Post()
+  @LogPerformance('user-creation')
+  async createUser(@Body() userData: any) {
+    // Operação que será medida automaticamente
+    return { id: 1, ...userData }
+  }
+
+  @Get('error')
+  @LogError('Failed to fetch user')
+  async getUserWithError() {
+    throw new Error('User not found')
+  }
+
+  @Get('critical')
+  @LogCritical('Critical system failure')
+  async criticalOperation() {
+    // Operação crítica que será logada com nível crítico
+    return { status: 'critical' }
+  }
+}
+```
+
+#### @TransactionLog - Logging de Transações
+
+```typescript
+import { Controller, Post, Body } from '@nestjs/common'
+import { TransactionLog } from '@starbemtech/star-node-stack-helper'
+
+@Controller('transactions')
+export class TransactionController {
+  @Post('payment')
+  @TransactionLog({
+    microservice: 'payment-service',
+    operation: 'process-payment',
+    elasticLogger,
+  })
+  async processPayment(@Body() paymentData: any) {
+    // Transação será automaticamente logada
+    return { transactionId: 'tx_123', status: 'success' }
+  }
+}
+```
+
+### Interceptors
+
+#### TransactionLogInterceptor - Interceptor Manual
+
+```typescript
+import { Controller, Get, UseInterceptors } from '@nestjs/common'
+import { TransactionLogInterceptor } from '@starbemtech/star-node-stack-helper'
+
+@Controller('api')
+@UseInterceptors(
+  new TransactionLogInterceptor({
+    microservice: 'my-service',
+    operation: 'api-request',
+    elasticLogger,
+  })
+)
+export class ApiController {
+  @Get('users')
+  async getUsers() {
+    return [{ id: 1, name: 'João' }]
+  }
+}
+```
+
+#### AutoTransactionLogInterceptor - Interceptor Automático
+
+```typescript
+import { Controller, Get, UseInterceptors } from '@nestjs/common'
+import {
+  AutoTransactionLogInterceptor,
+  TransactionLog,
+} from '@starbemtech/star-node-stack-helper'
+
+@Controller('api')
+@UseInterceptors(
+  new AutoTransactionLogInterceptor({
+    elasticLogger,
+    defaultMicroservice: 'my-service',
+  })
+)
+export class ApiController {
+  @Get('users')
+  @TransactionLog({
+    operation: 'get-users',
+    microservice: 'user-service',
+  })
+  async getUsers() {
+    return [{ id: 1, name: 'João' }]
+  }
+}
+```
+
+### Guards
+
+#### LogGuard - Guard de Autenticação com Logging
+
+```typescript
+import { Controller, Get, UseGuards } from '@nestjs/common'
+import { LogGuard } from '@starbemtech/star-node-stack-helper'
+
+@Controller('protected')
+@UseGuards(
+  new LogGuard({
+    elasticLogger,
+    logLevel: 'info',
+  })
+)
+export class ProtectedController {
+  @Get('data')
+  async getProtectedData() {
+    return { data: 'sensitive information' }
+  }
+}
+```
+
+### Exception Filters
+
+#### LogExceptionFilter - Filtro de Exceções
+
+```typescript
+import { Module } from '@nestjs/common'
+import { APP_FILTER } from '@nestjs/core'
+import { LogExceptionFilter } from '@starbemtech/star-node-stack-helper'
+
+@Module({
+  providers: [
+    {
+      provide: APP_FILTER,
+      useClass: LogExceptionFilter,
+    },
+  ],
+})
+export class AppModule {}
+```
+
+### Exemplo Completo NestJS
+
+```typescript
+import {
+  Module,
+  Controller,
+  Get,
+  Post,
+  Body,
+  UseInterceptors,
+} from '@nestjs/common'
+import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core'
+import {
+  ElasticLogger,
+  LoggerConfig,
+  TransactionLogInterceptor,
+  LogExceptionFilter,
+  TransactionLog,
+  Log,
+} from '@starbemtech/star-node-stack-helper'
+
+// Configuração
+const elasticConfig: LoggerConfig = {
+  node: 'https://your-opensearch-endpoint.com',
+  service: 'my-nestjs-app',
+  environment: 'production',
+  index: 'nestjs-logs',
+  region: 'us-east-1',
+  authType: 'aws',
+}
+
+const elasticLogger = new ElasticLogger(elasticConfig)
+
+// Controller
+@Controller('api')
+@UseInterceptors(
+  new TransactionLogInterceptor({
+    microservice: 'api-service',
+    operation: 'api-request',
+    elasticLogger,
+  })
+)
+export class ApiController {
+  @Get('users')
+  @Log('info', 'Fetching users list')
+  async getUsers() {
+    return [
+      { id: 1, name: 'João' },
+      { id: 2, name: 'Maria' },
+    ]
+  }
+
+  @Post('users')
+  @TransactionLog({
+    microservice: 'user-service',
+    operation: 'create-user',
+    elasticLogger,
+  })
+  async createUser(@Body() userData: any) {
+    return {
+      id: Math.floor(Math.random() * 1000),
+      ...userData,
+      createdAt: new Date().toISOString(),
+    }
+  }
+}
+
+// Módulo Principal
+@Module({
+  controllers: [ApiController],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useValue: new TransactionLogInterceptor({
+        microservice: 'my-nestjs-app',
+        operation: 'global-request',
+        elasticLogger,
+      }),
+    },
+    {
+      provide: APP_FILTER,
+      useClass: LogExceptionFilter,
+    },
+  ],
+})
+export class AppModule {}
+```
+
+### Configuração Avançada
+
+#### Interceptor com Contexto Customizado
+
+```typescript
+import { TransactionLogInterceptor } from '@starbemtech/star-node-stack-helper'
+
+const customInterceptor = new TransactionLogInterceptor({
+  microservice: 'my-service',
+  operation: 'api-request',
+  elasticLogger,
+  customContext: (context) => ({
+    userId: context.switchToHttp().getRequest().user?.id,
+    sessionId: context.switchToHttp().getRequest().sessionId,
+    customField: 'custom-value',
+  }),
+})
+```
+
+#### Exception Filter com Configuração Customizada
+
+```typescript
+import { LogExceptionFilter } from '@starbemtech/star-node-stack-helper'
+
+const customExceptionFilter = new LogExceptionFilter({
+  elasticLogger,
+  logLevel: 'error',
+  customContext: (host) => ({
+    requestId: host.switchToHttp().getRequest().id,
+    userId: host.switchToHttp().getRequest().user?.id,
+  }),
 })
 ```
 
@@ -761,6 +1098,77 @@ Creates middleware that logs detailed transaction information.
 #### `addTransactionId(req: Request, res: Response, next: NextFunction): void`
 
 Adds a transaction ID to the request object.
+
+### NestJS Integration
+
+#### Decorators
+
+##### `@Log(level: LogLevel, message: string)`
+
+Decorator for basic logging with specified level and message.
+
+##### `@LogPerformance(operation: string)`
+
+Decorator for performance logging that automatically measures execution time.
+
+##### `@LogError(message: string)`
+
+Decorator for error logging with specified message.
+
+##### `@LogCritical(message: string)`
+
+Decorator for critical error logging.
+
+##### `@TransactionLog(options: TransactionLogOptions)`
+
+Decorator for transaction logging with custom options.
+
+#### Interceptors
+
+##### `TransactionLogInterceptor`
+
+Manual transaction logging interceptor for NestJS applications.
+
+**Constructor Options:**
+
+- `microservice: string` - Name of the microservice
+- `operation: string` - Operation being performed
+- `elasticLogger: ElasticLogger` - ElasticLogger instance
+- `customContext?: (context: ExecutionContext) => Record<string, unknown>` - Custom context function
+
+##### `AutoTransactionLogInterceptor`
+
+Automatic transaction logging interceptor that reads metadata from decorators.
+
+**Constructor Options:**
+
+- `elasticLogger: ElasticLogger` - ElasticLogger instance
+- `defaultMicroservice?: string` - Default microservice name
+- `customContext?: (context: ExecutionContext) => Record<string, unknown>` - Custom context function
+
+#### Guards
+
+##### `LogGuard`
+
+Guard for authentication/authorization with automatic logging.
+
+**Constructor Options:**
+
+- `elasticLogger: ElasticLogger` - ElasticLogger instance
+- `logLevel?: LogLevel` - Log level for guard operations
+- `customContext?: (context: ExecutionContext) => Record<string, unknown>` - Custom context function
+
+#### Exception Filters
+
+##### `LogExceptionFilter`
+
+Exception filter that automatically logs errors to Elasticsearch/OpenSearch.
+
+**Constructor Options:**
+
+- `elasticLogger: ElasticLogger` - ElasticLogger instance
+- `logLevel?: LogLevel` - Log level for exceptions
+- `customContext?: (host: ArgumentsHost) => Record<string, unknown>` - Custom context function
 
 ## 🤝 Contributing
 
