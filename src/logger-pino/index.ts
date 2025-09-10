@@ -11,7 +11,7 @@ export const createPinoLogger = (config: PinoLoggerConfig) => {
     formatters: {
       level:
         config.customFormatters?.level ||
-        ((label: string) => ({ level: label } as any)),
+        ((label: string) => ({ level: label }) as any),
       log: config.customFormatters?.log || ((object: unknown) => object as any),
     },
     serializers: {
