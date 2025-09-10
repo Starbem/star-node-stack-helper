@@ -3,7 +3,7 @@ import pinoHttp from 'pino-http'
 import { PinoLoggerConfig } from './types'
 import { Request, Response } from 'express'
 
-export const createPinoLogger = (config: PinoLoggerConfig): pino.Logger => {
+export const createPinoLogger = (config: PinoLoggerConfig): any => {
   const baseConfig = {
     name: config.serviceName,
     level: config.logLevel || 'info',
@@ -57,7 +57,7 @@ export const createPinoLogger = (config: PinoLoggerConfig): pino.Logger => {
 }
 
 export const createHttpLogger = (
-  logger: pino.Logger,
+  logger: any,
   options?: {
     silentRoutes?: string[]
     customLogLevel?: (req: Request, res: Response, err?: Error) => string
