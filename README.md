@@ -1,566 +1,785 @@
 # Star Node Stack Helper
 
-A helper library for Node.js applications that provides utilities for AWS Secrets Manager integration and Elasticsearch/OpenSearch logging with enterprise-grade features.
+A comprehensive helper library for Node.js applications that provides enterprise-grade utilities for AWS Secrets Manager integration, Elasticsearch/OpenSearch logging, and Express.js middleware with advanced features.
 
-## Features
+## 🚀 Features
 
-- 🔐 AWS Secrets Manager integration with IAM roles support
-- 📝 Elasticsearch/OpenSearch logging with transaction tracking
-- 🛡️ TypeScript support with strict type checking
-- 🧪 Jest testing setup with coverage reporting
-- 📦 Modern development tools (ESLint, Prettier, Husky)
-- 🔄 Retry logic with exponential backoff
-- 🏥 Health check and monitoring utilities
-- 🔒 SSL security configuration
-- 📊 Comprehensive error handling and logging
+- **AWS Secrets Manager Integration**: Secure secret loading with retry logic and IAM role support
+- **Elasticsearch/OpenSearch Logging**: Enterprise-grade logging with transaction tracking
+- **Pino Logger Integration**: High-performance structured logging
+- **Express Middleware**: Performance monitoring and transaction logging
+- **TypeScript Support**: Full type safety and IntelliSense support
+- **AWS IAM Integration**: Seamless authentication with AWS services
 
-## Installation
+## 📦 Installation
 
 ```bash
 npm install @starbemtech/star-node-stack-helper
 # or
-yarn add @starbemtech/star-node-stack-helper
-# or
 pnpm add @starbemtech/star-node-stack-helper
+# or
+yarn add @starbemtech/star-node-stack-helper
 ```
 
-## Usage
+## 🔧 Requirements
 
-### AWS Secrets Manager
+- Node.js >= 18
+- TypeScript (optional but recommended)
 
-The library provides a robust way to load secrets from AWS Secrets Manager with support for IAM roles, retry logic, and automatic environment variable injection.
+## 📚 Table of Contents
 
-#### Basic Usage
+- [AWS Secrets Manager](#aws-secrets-manager)
+- [Elasticsearch/OpenSearch Logging](#elasticsearchopensearch-logging)
+- [Pino Logger](#pino-logger)
+- [Express Middleware](#express-middleware)
+- [TypeScript Types](#typescript-types)
+- [Examples](#examples)
+- [API Reference](#api-reference)
+
+## 🔐 AWS Secrets Manager
+
+### Basic Usage
 
 ```typescript
 import {
   loadSecrets,
+  testSavedSecrets,
   isRunningOnAWS,
   getAWSRegion,
-} from 'star-node-stack-helper'
+} from '@starbemtech/star-node-stack-helper'
 
-// Load a single secret
+// Load secrets from AWS Secrets Manager
 const secrets = await loadSecrets({
   region: 'us-east-1',
-  secretName: 'my-secret',
+  secretName: ['prod/database/credentials', 'prod/api/keys'],
 })
 
-// Load multiple secrets
-const secrets = await loadSecrets({
-  region: 'us-east-1',
-  secretName: ['my-secret-1', 'my-secret-2'],
-})
-```
-
-#### Using IAM Roles (Recommended for Production)
-
-```typescript
-// When running on AWS (EC2, Lambda, ECS), credentials are automatically detected
-const secrets = await loadSecrets({
-  region: 'us-east-1',
-  secretName: 'production/database-credentials',
-})
+// Test if secrets were loaded correctly
+testSavedSecrets()
 
 // Check if running on AWS
-if (isRunningOnAWS()) {
-  console.log('Running on AWS infrastructure')
+const isAWS = isRunningOnAWS() // true if running on AWS Lambda or EC2
+
+// Get AWS region
+const region = getAWSRegion() // 'us-east-1' or undefined
+```
+
+### Advanced Configuration
+
+```typescript
+import {
+  loadSecrets,
+  SecretConfig,
+  RetryConfig,
+} from '@starbemtech/star-node-stack-helper'
+
+const retryConfig: RetryConfig = {
+  maxRetries: 3,
+  retryDelay: 1000,
+  exponentialBackoff: true,
 }
 
-// Get AWS region from environment
-const region = getAWSRegion() // Returns 'us-east-1' or undefined
-```
-
-#### Using Explicit Credentials (Development)
-
-```typescript
-const secrets = await loadSecrets({
+const secretConfig: SecretConfig = {
   region: 'us-east-1',
-  accessKeyId: 'YOUR_ACCESS_KEY',
-  secretAccessKey: 'YOUR_SECRET_KEY',
-  secretName: 'dev/my-secret',
-})
-```
-
-#### Custom Retry Configuration
-
-```typescript
-const secrets = await loadSecrets(
-  {
-    region: 'us-east-1',
-    secretName: 'my-secret',
+  secretName: ['prod/database/credentials'],
+  retry: retryConfig,
+  credentials: {
+    accessKeyId: 'your-access-key',
+    secretAccessKey: 'your-secret-key',
   },
-  {
-    maxAttempts: 5,
-    delayMs: 2000,
-  }
-)
+}
+
+const secrets = await loadSecrets(secretConfig)
 ```
 
-#### Debug Secrets (Development Only)
+### Environment Variables
+
+After loading secrets, they are automatically set as environment variables:
 
 ```typescript
-import { testSavedSecrets } from 'star-node-stack-helper'
+// If secret contains: { "DB_HOST": "localhost", "DB_PORT": "5432" }
+// These become available as:
+console.log(process.env.DB_HOST) // 'localhost'
+console.log(process.env.DB_PORT) // '5432'
+```
 
-// Load secrets
-await loadSecrets({
+## 📊 Elasticsearch/OpenSearch Logging
+
+### Basic Setup
+
+```typescript
+import {
+  ElasticLogger,
+  LoggerConfig,
+} from '@starbemtech/star-node-stack-helper'
+
+const config: LoggerConfig = {
+  node: 'https://your-opensearch-cluster.us-east-1.es.amazonaws.com',
+  service: 'my-service',
+  environment: 'production',
+  index: 'application-logs',
   region: 'us-east-1',
-  secretName: 'my-secret',
-})
+  authType: 'aws', // or 'basic' with username/password
+}
 
-// Display all environment variables (useful for debugging)
-testSavedSecrets()
+const logger = new ElasticLogger(config)
 ```
 
-### Elasticsearch/OpenSearch Logger
-
-The library includes a comprehensive Elasticsearch/OpenSearch logger with transaction tracking, health monitoring, and robust error handling.
-
-#### Basic Setup
+### Logging Messages
 
 ```typescript
-import { ElasticLogger } from 'star-node-stack-helper'
-
-// Initialize the logger with AWS Authentication
-const logger = new ElasticLogger({
-  node: 'your aws node url',
-  authType: 'aws',
-  index: 'my-service-logs',
-  service: 'my-service',
-  environment: 'development',
-})
-
-// Initialize the logger with username and password
-const logger = new ElasticLogger({
-  node: 'http://localhost:9200',
-  username: 'admin',
-  password: 'admin',
-  index: 'my-service-logs',
-  service: 'my-service',
-  environment: 'development',
-})
-```
-
-#### Logging Messages
-
-```typescript
-// Log an info message
+// Basic logging
 await logger.log('info', 'User logged in successfully', {
   userId: '123',
   sessionId: 'sess_456',
-  timestamp: new Date(),
+  ip: '192.168.1.1',
 })
 
-// Log a warning
-await logger.log('warn', 'High memory usage detected', {
-  memoryUsage: process.memoryUsage(),
-  threshold: 80,
-})
-
-// Log an error
-await logger.log('error', 'Failed to process payment', {
-  error: new Error('Insufficient funds'),
-  transactionId: 'tx_123',
-  userId: 'user_456',
-})
-
-// Log debug information
-await logger.log('debug', 'Processing request', {
-  requestId: 'req_789',
-  method: 'POST',
-  path: '/api/payments',
+// Different log levels
+await logger.log('debug', 'Debug information', { step: 'validation' })
+await logger.log('warn', 'Warning message', { threshold: 80 })
+await logger.log('error', 'Error occurred', {
+  error: 'Database connection failed',
 })
 ```
 
-#### Transaction Logging
+### Transaction Logging
 
 ```typescript
-// Successful transaction
-const startTime = Date.now()
-try {
-  // Your business logic here
-  await processPayment()
+import { LogTransaction } from '@starbemtech/star-node-stack-helper'
 
-  await logger.logTransaction({
-    name: 'payment_processing',
-    status: 'success',
-    duration: Date.now() - startTime,
-    context: {
-      userId: 'user_123',
-      transactionId: 'tx_456',
-      paymentMethod: 'credit_card',
-      amount: 100.5,
-      currency: 'USD',
-    },
-    requestMeta: {
-      method: 'POST',
-      path: '/api/payments',
-      ip: '192.168.1.100',
-    },
-  })
-} catch (error) {
-  // Failed transaction
-  await logger.logTransaction({
-    name: 'payment_processing',
-    status: 'fail',
-    duration: Date.now() - startTime,
-    context: {
-      userId: 'user_123',
-      transactionId: 'tx_456',
-      paymentMethod: 'credit_card',
-      amount: 100.5,
-      currency: 'USD',
-    },
-    requestMeta: {
-      method: 'POST',
-      path: '/api/payments',
-      ip: '192.168.1.100',
-    },
-    error: {
-      message: error instanceof Error ? error.message : 'Unknown error',
-    },
-  })
+const transaction: LogTransaction = {
+  name: 'user-registration',
+  microservice: 'auth-service',
+  operation: 'create-user',
+  status: 'success',
+  duration: 1500,
+  context: {
+    userId: '123',
+    email: 'user@example.com',
+    plan: 'premium',
+  },
+  requestMeta: {
+    method: 'POST',
+    path: '/api/users',
+    ip: '192.168.1.1',
+    userAgent: 'Mozilla/5.0...',
+  },
 }
+
+await logger.logTransaction(transaction)
 ```
 
-#### Searching Logs
+### Searching Logs
 
 ```typescript
 // Search system logs
-const systemLogs = await logger.getSystemLogs('Log example')
-console.log('Found system logs:', systemLogs)
+const systemLogs = await logger.getSystemLogs('user login')
 
 // Search transaction logs
-const transactions = await logger.getLogsTransactions(['payment_processing'])
-console.log('Found transactions:', transactions)
+const transactionLogs = await logger.getLogsTransactions('user-registration')
 
-// Search with multiple terms
-const logs = await logger.getSystemLogs(['user_123', 'payment'])
+// Multiple queries
+const logs = await logger.getSystemLogs(['error', 'database', 'timeout'])
 ```
 
-#### Health Monitoring
+### Health Check and Maintenance
 
 ```typescript
 // Check cluster health
 const isHealthy = await logger.healthCheck()
-if (isHealthy) {
-  console.log('Elasticsearch cluster is healthy')
-} else {
-  console.error('Elasticsearch cluster health check failed')
-}
 
-// Flush indices to ensure logs are visible
+// Test connection
+await logger.testConnection()
+
+// Flush indices
 await logger.flush()
+
+// Recreate index (useful for schema changes)
+await logger.recreateIndex()
 ```
 
-#### Production Configuration
+## 🎯 Pino Logger
+
+### Basic Setup
 
 ```typescript
-const logger = new ElasticLogger({
-  node: 'https://your-opensearch-cluster:9200',
-  username: process.env.OPENSEARCH_USERNAME,
-  password: process.env.OPENSEARCH_PASSWORD,
-  index: 'production-logs',
-  service: 'payment-service',
+import {
+  createPinoLogger,
+  createHttpLogger,
+  pinoLogContext,
+} from '@starbemtech/star-node-stack-helper'
+
+const logger = createPinoLogger({
+  serviceName: 'my-service',
   environment: 'production',
+  logLevel: 'info',
+})
+
+// Create HTTP middleware
+const httpLogger = createHttpLogger(logger)
+```
+
+### Express Integration
+
+```typescript
+import express from 'express'
+
+const app = express()
+
+// Add HTTP logging middleware
+app.use(httpLogger)
+
+app.get('/api/users', (req, res) => {
+  // Logs are automatically captured
+  res.json({ users: [] })
 })
 ```
 
-## Configuration
-
-### Environment Variables
-
-The library automatically detects AWS credentials from environment variables:
-
-- `AWS_ACCESS_KEY_ID` - AWS access key
-- `AWS_SECRET_ACCESS_KEY` - AWS secret key
-- `AWS_REGION` - AWS region
-- `NODE_ENV` - Environment (production/development)
-
-### SSL Configuration
-
-- **Development**: SSL verification is disabled for local development
-- **Production**: SSL verification is enabled by default
-
-## Development
-
-### Prerequisites
-
-- Node.js >= 18
-- pnpm >= 8.6.2
-
-### Setup
-
-1. Install dependencies:
-
-```bash
-pnpm install
-```
-
-2. Build the project:
-
-```bash
-pnpm build
-```
-
-3. Run tests:
-
-```bash
-pnpm test
-```
-
-4. Run tests with coverage:
-
-```bash
-pnpm test:coverage
-```
-
-5. Lint code:
-
-```bash
-pnpm lint
-```
-
-6. Format code:
-
-```bash
-pnpm format
-```
-
-### Docker Development Environment
-
-The library includes a Docker Compose configuration for local development with OpenSearch and OpenSearch Dashboards.
-
-```bash
-cd dev
-docker-compose up -d
-```
-
-This will start:
-
-- OpenSearch on http://localhost:9200
-- OpenSearch Dashboards on http://localhost:5601
-
-### Available Scripts
-
-- `pnpm build` - Build the project
-- `pnpm test` - Run tests
-- `pnpm test:watch` - Run tests in watch mode
-- `pnpm test:coverage` - Run tests with coverage
-- `pnpm test:ci` - Run tests for CI environment
-- `pnpm lint` - Lint code
-- `pnpm lint:fix` - Fix linting issues
-- `pnpm format` - Format code
-- `pnpm clean` - Clean build artifacts
-
-## Error Handling
-
-The library provides comprehensive error handling:
+### Structured Logging
 
 ```typescript
-try {
-  await logger.log('info', 'Processing request')
-} catch (error) {
-  console.error('Logging failed:', error.message)
-  // Implement fallback logging or error handling
-}
+// Basic structured logging
+logger.info('User action completed', {
+  userId: '123',
+  action: 'profile_update',
+  timestamp: new Date().toISOString(),
+})
 
+// Using context helpers
+const requestContext = pinoLogContext.request(req, {
+  userId: '456',
+  sessionId: 'sess_789',
+})
+
+logger.info('User performed action', {
+  ...requestContext,
+  action: 'file_upload',
+  fileSize: 1024,
+  fileName: 'document.pdf',
+})
+
+// Performance logging
+const startTime = Date.now()
+// ... perform operation
+const duration = Date.now() - startTime
+
+const performanceContext = pinoLogContext.performance('file_upload', duration, {
+  fileSize: 1024,
+  fileName: 'document.pdf',
+})
+
+logger.info('Operation completed', {
+  ...requestContext,
+  ...performanceContext,
+  success: true,
+})
+
+// Error logging
 try {
-  const secrets = await loadSecrets({
-    region: 'us-east-1',
-    secretName: 'my-secret',
+  // ... risky operation
+} catch (error) {
+  const errorContext = pinoLogContext.error(error, {
+    operation: 'file_upload',
+    retryable: true,
   })
-} catch (error) {
-  console.error('Failed to load secrets:', error.message)
-  // Handle secret loading failure
+
+  logger.error('Operation failed', {
+    ...requestContext,
+    ...errorContext,
+    severity: 'high',
+  })
 }
 ```
 
-## Troubleshooting
-
-### OpenSearch Authentication Issues
-
-If you encounter authentication errors like `security_exception` or `authorization_exception`, follow these steps:
-
-#### 1. Test Connection and Permissions
+### Custom Configuration
 
 ```typescript
-const logger = new ElasticLogger({
-  node: 'https://your-opensearch-cluster:9200',
-  username: 'your-username',
-  password: 'your-password',
-  index: 'your-logs',
-  service: 'your-service',
+const logger = createPinoLogger({
+  serviceName: 'my-service',
   environment: 'production',
+  logLevel: 'debug',
+  customFormatters: {
+    level: (label) => ({ level: label.toUpperCase() }),
+    log: (object) => ({ ...object, custom: true }),
+  },
+  customSerializers: {
+    req: (req) => ({ method: req.method, url: req.url }),
+    res: (res) => ({ statusCode: res.statusCode }),
+    err: (err) => ({ message: err.message, stack: err.stack }),
+  },
+  redactPaths: ['password', 'token', 'secret'],
 })
+```
 
-// Test connection and permissions
-const connectionTest = await logger.testConnection()
-if (!connectionTest.success) {
-  console.error('Connection test failed:', connectionTest.error)
-  // Handle the error appropriately
+## 🛠 Express Middleware
+
+### Performance Logger Middleware
+
+```typescript
+import { performanceLoggerMiddleware } from '@starbemtech/star-node-stack-helper'
+
+// Apply to specific routes
+app.get(
+  '/api/slow-operation',
+  performanceLoggerMiddleware('my-service', 'slow-operation', 'production'),
+  (req, res) => {
+    // Middleware automatically measures and logs performance
+    setTimeout(() => {
+      res.json({ message: 'Operation completed' })
+    }, 1000)
+  }
+)
+
+// Apply to multiple routes
+const performanceMiddleware = performanceLoggerMiddleware(
+  'my-service',
+  'api-call',
+  'production'
+)
+
+app.use('/api', performanceMiddleware)
+```
+
+### Transaction Logger Middleware
+
+```typescript
+import {
+  transactionLoggerMiddleware,
+  ElasticLogger,
+} from '@starbemtech/star-node-stack-helper'
+
+const elasticLogger = new ElasticLogger(loggerConfig)
+
+// Apply to specific routes
+app.post(
+  '/api/users',
+  transactionLoggerMiddleware('user-service', 'create-user', elasticLogger),
+  (req, res) => {
+    // Middleware automatically captures:
+    // - Request metadata (method, path, IP, user agent)
+    // - Response status and timing
+    // - Request/response body (with sensitive data filtering)
+    // - Transaction ID generation
+
+    const user = createUser(req.body)
+    res.status(201).json({
+      user,
+      transactionId: req.transactionId, // Available on request object
+    })
+  }
+)
+
+// Apply globally with different operations
+app.use('/api', (req, res, next) => {
+  const operation = `${req.method.toLowerCase()}-${req.path.split('/').pop()}`
+  return transactionLoggerMiddleware('api-service', operation, elasticLogger)(
+    req,
+    res,
+    next
+  )
+})
+```
+
+### Transaction ID Middleware
+
+```typescript
+import { addTransactionId } from '@starbemtech/star-node-stack-helper'
+
+// Add transaction ID to all requests
+app.use(addTransactionId)
+
+app.get('/api/data', (req, res) => {
+  // req.transactionId is now available
+  res.json({
+    data: 'some data',
+    transactionId: req.transactionId,
+  })
+})
+```
+
+## 📝 TypeScript Types
+
+### Secret Configuration
+
+```typescript
+import {
+  SecretConfig,
+  RetryConfig,
+  LoadSecretsOptions,
+} from '@starbemtech/star-node-stack-helper'
+
+interface SecretConfig {
+  region: string
+  secretName: string | string[]
+  retry?: RetryConfig
+  credentials?: {
+    accessKeyId: string
+    secretAccessKey: string
+  }
 }
 
-// Validate configuration
-const configValidation = logger.validateLoggerConfig()
-if (!configValidation.valid) {
-  console.error('Configuration errors:', configValidation.errors)
+interface RetryConfig {
+  maxRetries: number
+  retryDelay: number
+  exponentialBackoff: boolean
 }
 ```
 
-#### 2. Common Solutions
-
-**For AWS OpenSearch Service:**
+### Logger Configuration
 
 ```typescript
-// Use IAM authentication instead of username/password
-const logger = new ElasticLogger({
-  node: 'https://your-domain.region.es.amazonaws.com',
-  // Remove username/password - use IAM roles
-  index: 'your-logs',
-  service: 'your-service',
-  environment: 'production',
-})
-```
+import {
+  LoggerConfig,
+  LogLevel,
+  LogTransaction,
+} from '@starbemtech/star-node-stack-helper'
 
-**For Self-hosted OpenSearch:**
-
-```typescript
-// Ensure user has proper permissions
-const logger = new ElasticLogger({
-  node: 'https://your-opensearch:9200',
-  username: 'admin', // Use admin user or user with write permissions
-  password: 'admin-password',
-  index: 'your-logs',
-  service: 'your-service',
-  environment: 'production',
-})
-```
-
-#### 3. Check OpenSearch User Permissions
-
-Ensure your OpenSearch user has the following permissions:
-
-- `indices:data/write/index` for the log index
-- `indices:data/write/delete` for cleanup operations
-- `indices:admin/create` for index creation (if auto-create is enabled)
-
-#### 4. SSL/TLS Issues
-
-```typescript
-// For development with self-signed certificates
-const logger = new ElasticLogger({
-  node: 'https://localhost:9200',
-  username: 'admin',
-  password: 'admin',
-  index: 'test-logs',
-  service: 'test-service',
-  environment: 'development',
-  // SSL verification is automatically disabled in development
-})
-```
-
-#### 5. Mapping Issues
-
-If you encounter `mapper_parsing_exception` errors, it means the index has incorrect field mappings:
-
-```typescript
-// Check and fix mapping automatically
-const mappingResult = await logger.checkAndFixIndexMapping()
-if (!mappingResult.success) {
-  console.error('Mapping fix failed:', mappingResult.error)
-
-  // Option 1: Recreate index (WARNING: deletes all data)
-  const recreateResult = await logger.recreateIndex()
-
-  // Option 2: Use the fix-mapping script
-  // node example/fix-mapping.ts
+interface LoggerConfig {
+  node: string
+  service: string
+  environment: string
+  index: string
+  region: string
+  authType: 'aws' | 'basic'
+  username?: string
+  password?: string
 }
-```
 
-**Common Mapping Issues:**
-
-- Field `message` defined as `object` instead of `text`
-- Missing field definitions
-- Incorrect data types
-
-**Manual Fix via OpenSearch Dashboards:**
-
-```json
-PUT your-index/_mapping
-{
-  "properties": {
-    "message": { "type": "text" },
-    "timestamp": { "type": "date" },
-    "level": { "type": "keyword" },
-    "service": { "type": "keyword" }
+interface LogTransaction {
+  name: string
+  microservice: string
+  operation: string
+  status: 'success' | 'fail'
+  duration: number
+  context?: Record<string, unknown>
+  requestMeta?: {
+    method: string
+    path: string
+    ip?: string
+    userAgent?: string
   }
 }
 ```
 
-## Best Practices
+### Pino Logger Configuration
 
-### Security
+```typescript
+import { PinoLoggerConfig } from '@starbemtech/star-node-stack-helper'
 
-1. **Use IAM Roles** in production instead of hardcoded credentials
-2. **Enable SSL** in production environments
-3. **Validate inputs** before processing
-4. **Handle errors gracefully** with appropriate fallbacks
+interface PinoLoggerConfig {
+  serviceName: string
+  environment: string
+  logLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
+  customFormatters?: {
+    level?: (label: string) => unknown
+    log?: (object: unknown) => unknown
+  }
+  customSerializers?: {
+    req?: (req: unknown) => unknown
+    res?: (res: unknown) => unknown
+    err?: (err: unknown) => unknown
+  }
+  redactPaths?: string[]
+}
+```
 
-### Performance
+## 🎯 Examples
 
-1. **Reuse logger instances** instead of creating new ones
-2. **Use appropriate log levels** (debug, info, warn, error)
-3. **Batch operations** when possible
-4. **Monitor cluster health** regularly
+### Complete Express Application
 
-### Monitoring
+```typescript
+import express from 'express'
+import {
+  ElasticLogger,
+  LoggerConfig,
+  loadSecrets,
+  transactionLoggerMiddleware,
+  createPinoLogger,
+  createHttpLogger,
+  performanceLoggerMiddleware,
+  pinoLogContext,
+} from '@starbemtech/star-node-stack-helper'
 
-1. **Set up alerts** for cluster health failures
-2. **Monitor log volume** and performance
-3. **Use transaction logging** for business-critical operations
-4. **Implement proper error tracking**
+// Load secrets on startup
+await loadSecrets({
+  region: 'us-east-1',
+  secretName: ['prod/database/credentials', 'prod/api/keys'],
+})
 
-## Contributing
+// Configure loggers
+const elasticConfig: LoggerConfig = {
+  node: process.env.OPENSEARCH_ENDPOINT!,
+  service: 'my-api',
+  environment: 'production',
+  index: 'api-logs',
+  region: 'us-east-1',
+  authType: 'aws',
+}
 
-We welcome contributions to improve this library! Here's how you can help:
+const elasticLogger = new ElasticLogger(elasticConfig)
+const pinoLogger = createPinoLogger({
+  serviceName: 'my-api',
+  environment: 'production',
+  logLevel: 'info',
+})
 
-### Development Workflow
+const app = express()
+
+// Global middleware
+app.use(createHttpLogger(pinoLogger))
+app.use(express.json())
+
+// Performance monitoring for all API routes
+app.use(
+  '/api',
+  performanceLoggerMiddleware('my-api', 'api-request', 'production')
+)
+
+// Transaction logging for specific operations
+app.post(
+  '/api/users',
+  transactionLoggerMiddleware('user-service', 'create-user', elasticLogger),
+  async (req, res) => {
+    try {
+      const user = await createUser(req.body)
+
+      pinoLogger.info('User created successfully', {
+        ...pinoLogContext.request(req, { userId: user.id }),
+        action: 'user_creation',
+        userRole: user.role,
+      })
+
+      res.status(201).json({
+        user,
+        transactionId: req.transactionId,
+      })
+    } catch (error) {
+      pinoLogger.error('Failed to create user', {
+        ...pinoLogContext.request(req),
+        ...pinoLogContext.error(error),
+        action: 'user_creation',
+      })
+
+      res.status(500).json({
+        error: 'Internal server error',
+        transactionId: req.transactionId,
+      })
+    }
+  }
+)
+
+app.listen(3000, () => {
+  pinoLogger.info('Server started', {
+    port: 3000,
+    environment: 'production',
+  })
+})
+```
+
+### AWS Lambda Function
+
+```typescript
+import { APIGatewayProxyHandler } from 'aws-lambda'
+import {
+  ElasticLogger,
+  loadSecrets,
+  pinoLogContext,
+} from '@starbemtech/star-node-stack-helper'
+
+// Load secrets once (Lambda container reuse)
+let secretsLoaded = false
+let logger: ElasticLogger
+
+export const handler: APIGatewayProxyHandler = async (event) => {
+  // Load secrets only once per container
+  if (!secretsLoaded) {
+    await loadSecrets({
+      region: process.env.AWS_REGION!,
+      secretName: ['prod/api/keys'],
+    })
+
+    logger = new ElasticLogger({
+      node: process.env.OPENSEARCH_ENDPOINT!,
+      service: 'lambda-api',
+      environment: 'production',
+      index: 'lambda-logs',
+      region: process.env.AWS_REGION!,
+      authType: 'aws',
+    })
+
+    secretsLoaded = true
+  }
+
+  try {
+    // Your business logic here
+    const result = await processRequest(event)
+
+    // Log successful operation
+    await logger.logTransaction({
+      name: 'api-request',
+      microservice: 'lambda-api',
+      operation: 'process-request',
+      status: 'success',
+      duration: Date.now() - event.requestContext.requestTime,
+      context: {
+        path: event.path,
+        method: event.httpMethod,
+        userId: event.requestContext.authorizer?.userId,
+      },
+      requestMeta: {
+        method: event.httpMethod,
+        path: event.path,
+        ip: event.requestContext.identity.sourceIp,
+        userAgent: event.headers['User-Agent'],
+      },
+    })
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify(result),
+    }
+  } catch (error) {
+    // Log error
+    await logger.log('error', 'Lambda function error', {
+      ...pinoLogContext.error(error),
+      path: event.path,
+      method: event.httpMethod,
+    })
+
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Internal server error' }),
+    }
+  }
+}
+```
+
+## 📖 API Reference
+
+### AWS Secrets Manager
+
+#### `loadSecrets(config: SecretConfig | LoadSecretsOptions): Promise<void>`
+
+Loads secrets from AWS Secrets Manager and sets them as environment variables.
+
+**Parameters:**
+
+- `config`: Configuration object with region, secret names, and optional retry settings
+
+**Example:**
+
+```typescript
+await loadSecrets({
+  region: 'us-east-1',
+  secretName: ['prod/database/credentials'],
+})
+```
+
+#### `testSavedSecrets(): void`
+
+Tests if secrets were loaded correctly by logging environment variables.
+
+#### `isRunningOnAWS(): boolean`
+
+Returns `true` if the application is running on AWS (Lambda, EC2, etc.).
+
+#### `getAWSRegion(): string | undefined`
+
+Returns the current AWS region or `undefined` if not running on AWS.
+
+### Elasticsearch/OpenSearch Logger
+
+#### `new ElasticLogger(config: LoggerConfig)`
+
+Creates a new ElasticLogger instance.
+
+#### `logger.log(level: LogLevel, message: string, metadata?: Record<string, unknown>): Promise<void>`
+
+Logs a message with the specified level and metadata.
+
+#### `logger.logTransaction(transaction: LogTransaction): Promise<void>`
+
+Logs a transaction with detailed metadata.
+
+#### `logger.getSystemLogs(query: string | string[]): Promise<any[]>`
+
+Searches system logs with the given query.
+
+#### `logger.getLogsTransactions(query: string | string[]): Promise<any[]>`
+
+Searches transaction logs with the given query.
+
+#### `logger.healthCheck(): Promise<boolean>`
+
+Checks the health of the OpenSearch cluster.
+
+#### `logger.testConnection(): Promise<void>`
+
+Tests the connection to OpenSearch.
+
+#### `logger.flush(): Promise<void>`
+
+Flushes all indices.
+
+#### `logger.recreateIndex(): Promise<void>`
+
+Recreates the index (useful for schema changes).
+
+### Pino Logger
+
+#### `createPinoLogger(config: PinoLoggerConfig): pino.Logger`
+
+Creates a configured Pino logger instance.
+
+#### `createHttpLogger(logger: pino.Logger, options?: HttpLoggerOptions): HttpLogger`
+
+Creates an Express HTTP logging middleware.
+
+#### `pinoLogContext.request(req: Request, additionalData?: Record<string, unknown>): Record<string, unknown>`
+
+Creates request context for logging.
+
+#### `pinoLogContext.error(error: Error, context?: Record<string, unknown>): Record<string, unknown>`
+
+Creates error context for logging.
+
+#### `pinoLogContext.performance(operation: string, duration: number, metadata?: Record<string, unknown>): Record<string, unknown>`
+
+Creates performance context for logging.
+
+### Express Middleware
+
+#### `performanceLoggerMiddleware(service: string, operation: string, environment: string): ExpressMiddleware`
+
+Creates middleware that measures and logs request performance.
+
+#### `transactionLoggerMiddleware(service: string, operation: string, elasticLogger: ElasticLogger | null): ExpressMiddleware`
+
+Creates middleware that logs detailed transaction information.
+
+#### `addTransactionId(req: Request, res: Response, next: NextFunction): void`
+
+Adds a transaction ID to the request object.
+
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create a new branch for your feature/fix:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-3. Make your changes
-4. Run tests to ensure everything works:
-   ```bash
-   pnpm test
-   ```
-5. Commit your changes following the conventional commits format:
-   ```bash
-   git commit -m "feat: add new feature"
-   git commit -m "fix: resolve issue with X"
-   ```
-6. Push your branch and create a Pull Request
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-### Code Style
+## 📄 License
 
-- Follow the existing code style
-- Use TypeScript for all new code
-- Write tests for new features
-- Update documentation when adding new features
-- Ensure all tests pass before submitting a PR
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-### Pull Request Process
+## 🆘 Support
 
-1. Update the README.md with details of changes if needed
-2. Update the version numbers in package.json following [SemVer](https://semver.org/)
-3. The PR will be merged once you have the sign-off of at least one maintainer
+For support, email support@starbem.app or create an issue in the GitHub repository.
 
-## License
+## 🔗 Links
 
-MIT
-
-## Author
-
-Julio Sousa <julio.sousa@starbem.app>
+- [GitHub Repository](https://github.com/starbem/star-node-stack-helper)
+- [NPM Package](https://www.npmjs.com/package/@starbemtech/star-node-stack-helper)
+- [Documentation](https://github.com/starbem/star-node-stack-helper#readme)
