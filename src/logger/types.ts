@@ -30,6 +30,7 @@ export interface LogTransaction {
   }
   responseMeta?: {
     statusCode: number
+    data?: unknown
     responseSize?: number
   }
   error?: {

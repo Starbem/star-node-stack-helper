@@ -94,6 +94,7 @@ export const transactionLoggerMiddleware = (
         requestMeta,
         responseMeta: {
           statusCode: res.statusCode,
+          data: data as unknown,
           responseSize: (data as string)?.length || 0,
         },
       }
