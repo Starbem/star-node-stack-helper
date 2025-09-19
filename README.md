@@ -1,12 +1,13 @@
 # Star Node Stack Helper
 
-A comprehensive helper library for Node.js applications that provides enterprise-grade utilities for AWS Secrets Manager integration, Elasticsearch/OpenSearch logging, Express.js middleware, and NestJS integration with advanced features.
+A comprehensive helper library for Node.js applications that provides enterprise-grade utilities for AWS Secrets Manager integration, Elasticsearch/OpenSearch logging, Slack notifications, Express.js middleware, and NestJS integration with advanced features.
 
 ## 🚀 Features
 
 - **AWS Secrets Manager Integration**: Secure secret loading with retry logic and IAM role support
 - **Elasticsearch/OpenSearch Logging**: Enterprise-grade logging with transaction tracking
 - **Pino Logger Integration**: High-performance structured logging
+- **Slack Notifications**: Complete Slack integration with API and webhook support
 - **NestJS Compatibility**: Native integration with decorators, interceptors, guards, and exception filters
 - **Express Middleware**: Performance monitoring and transaction logging
 - **TypeScript Support**: Full type safety and IntelliSense support
@@ -32,6 +33,7 @@ yarn add @starbemtech/star-node-stack-helper
 - [AWS Secrets Manager](#aws-secrets-manager)
 - [Elasticsearch/OpenSearch Logging](#elasticsearchopensearch-logging)
 - [Pino Logger](#pino-logger)
+- [Slack Notifications](#slack-notifications)
 - [NestJS Compatibility](#nestjs-compatibility)
 - [Express Middleware](#express-middleware)
 - [TypeScript Types](#typescript-types)
@@ -326,6 +328,223 @@ const logger = createPinoLogger({
   redactPaths: ['password', 'token', 'secret'],
 })
 ```
+
+## 💬 Slack Notifications
+
+The library provides comprehensive Slack integration with support for both the official Slack API and webhooks, including formatted messages, interactive buttons, and attachments.
+
+### Basic Setup
+
+#### Using Slack API (Recommended)
+
+```typescript
+import {
+  sendSlackMessage,
+  SlackNotifier,
+  createSectionBlock,
+  createButtonElement,
+  createActionBlock,
+} from '@starbemtech/star-node-stack-helper'
+
+// Simple message
+const response = await sendSlackMessage(
+  {
+    channel: '#general',
+    text: 'Hello! This is a test notification.',
+    username: 'My Bot',
+    icon_emoji: ':robot_face:',
+  },
+  {
+    config: {
+      token: 'xoxb-your-bot-token-here',
+      defaultChannel: '#general',
+      botName: 'My Bot',
+    },
+    failSilently: true,
+  }
+)
+
+console.log('Message sent:', response.ok)
+```
+
+#### Using Slack Webhook
+
+```typescript
+import { sendSlackWebhook } from '@starbemtech/star-node-stack-helper'
+
+const response = await sendSlackWebhook(
+  {
+    text: 'Hello via webhook!',
+    channel: '#general',
+    username: 'Webhook Bot',
+  },
+  {
+    webhookUrl: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL',
+    defaultChannel: '#general',
+    botName: 'Webhook Bot',
+  }
+)
+```
+
+### Using SlackNotifier Class
+
+The `SlackNotifier` class provides a convenient way to manage Slack notifications:
+
+```typescript
+import { SlackNotifier } from '@starbemtech/star-node-stack-helper'
+
+const notifier = new SlackNotifier(
+  {
+    token: 'xoxb-your-bot-token-here',
+    defaultChannel: '#notifications',
+    botName: 'System Notifications',
+  },
+  {
+    failSilently: true,
+    retryConfig: {
+      maxAttempts: 5,
+      delayMs: 2000,
+    },
+  }
+)
+
+// Send different types of messages
+await notifier.sendMessage('Simple message')
+await notifier.sendSuccess('Operation completed successfully!')
+await notifier.sendWarning('Attention: Low resources detected')
+await notifier.sendError('Critical error: Database connection failed')
+```
+
+### Formatted Messages with Blocks
+
+```typescript
+import {
+  sendSlackMessage,
+  createSectionBlock,
+  createButtonElement,
+  createActionBlock,
+} from '@starbemtech/star-node-stack-helper'
+
+const blocks = [
+  createSectionBlock('*🚀 New Deploy Completed!*', { type: 'mrkdwn' }),
+  createSectionBlock('', {
+    fields: [
+      { type: 'mrkdwn', text: '*Environment:*' },
+      { type: 'mrkdwn', text: 'Production' },
+      { type: 'mrkdwn', text: '*Version:*' },
+      { type: 'mrkdwn', text: 'v1.2.3' },
+      { type: 'mrkdwn', text: '*Status:*' },
+      { type: 'mrkdwn', text: '✅ Success' },
+    ],
+  }),
+  createActionBlock([
+    createButtonElement('View Logs', 'view_logs', {
+      style: 'primary',
+      action_id: 'view_logs_btn',
+    }),
+    createButtonElement('Rollback', 'rollback', {
+      style: 'danger',
+      action_id: 'rollback_btn',
+    }),
+  ]),
+]
+
+const response = await sendSlackMessage(
+  {
+    channel: '#deployments',
+    text: 'New deploy completed successfully!',
+    blocks,
+  },
+  {
+    config: {
+      token: 'xoxb-your-bot-token-here',
+    },
+  }
+)
+```
+
+### Attachments
+
+```typescript
+import { createSlackAttachment } from '@starbemtech/star-node-stack-helper'
+
+const attachment = createSlackAttachment({
+  color: 'danger',
+  title: '🚨 System Alert',
+  text: 'The system detected a critical issue that requires immediate attention.',
+  fields: [
+    { title: 'Service', value: 'API Gateway', short: true },
+    { title: 'Error', value: 'Connection timeout', short: true },
+    { title: 'Timestamp', value: new Date().toISOString(), short: false },
+  ],
+  ts: Math.floor(Date.now() / 1000),
+})
+
+const response = await sendSlackMessage(
+  {
+    channel: '#alerts',
+    text: 'Critical system alert',
+    attachments: [attachment],
+  },
+  {
+    config: {
+      token: 'xoxb-your-bot-token-here',
+    },
+  }
+)
+```
+
+### Error Handling and Retry
+
+```typescript
+import { sendSlackMessage } from '@starbemtech/star-node-stack-helper'
+
+try {
+  const response = await sendSlackMessage(
+    {
+      channel: '#errors',
+      text: 'This message will be retried multiple times on failure',
+    },
+    {
+      config: {
+        token: 'xoxb-your-bot-token-here',
+      },
+      retryConfig: {
+        maxAttempts: 3,
+        delayMs: 1000,
+      },
+      failSilently: false, // Will throw error if it fails
+    }
+  )
+
+  console.log('Message sent successfully:', response)
+} catch (error) {
+  console.error('Failed to send message after all attempts:', error)
+}
+```
+
+### Configuration
+
+#### Slack API Setup
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps)
+2. Create a new app or select an existing one
+3. Navigate to "OAuth & Permissions"
+4. Add the following scopes:
+   - `chat:write` - Send messages
+   - `chat:write.public` - Send messages to public channels
+   - `chat:write.customize` - Customize bot name and icon
+5. Install the app to your workspace
+6. Copy the "Bot User OAuth Token" (starts with `xoxb-`)
+
+#### Webhook Setup
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps)
+2. Create a new app or select an existing one
+3. Navigate to "Incoming Webhooks"
+4. Activate "Activate Incoming Webhooks"
+5. Click "Add New Webhook to Workspace"
+6. Select the channel and copy the webhook URL
 
 ## 🚀 NestJS Compatibility
 
@@ -834,6 +1053,56 @@ interface PinoLoggerConfig {
 }
 ```
 
+### Slack Configuration
+
+```typescript
+import {
+  SlackConfig,
+  SlackMessage,
+  SlackResponse,
+  SlackNotificationOptions,
+  SlackWebhookConfig,
+  SlackWebhookMessage,
+  SlackBlock,
+  SlackAttachment,
+} from '@starbemtech/star-node-stack-helper'
+
+interface SlackConfig {
+  token: string
+  defaultChannel?: string
+  botName?: string
+  baseUrl?: string
+}
+
+interface SlackMessage {
+  channel: string
+  text: string
+  blocks?: SlackBlock[]
+  attachments?: SlackAttachment[]
+  username?: string
+  icon_emoji?: string
+  icon_url?: string
+  thread_ts?: string
+  replace_original?: boolean
+  delete_original?: boolean
+}
+
+interface SlackResponse {
+  ok: boolean
+  channel?: string
+  ts?: string
+  message?: {
+    text: string
+    user: string
+    ts: string
+    type: string
+    subtype?: string
+  }
+  error?: string
+  details?: string
+}
+```
+
 ## 🎯 Examples
 
 ### Complete Express Application
@@ -1075,6 +1344,74 @@ Flushes all indices.
 #### `logger.recreateIndex(): Promise<void>`
 
 Recreates the index (useful for schema changes).
+
+### Slack Notifications
+
+#### `sendSlackMessage(message: SlackMessage, options: SlackNotificationOptions): Promise<SlackResponse>`
+
+Sends a message to Slack using the official API.
+
+**Parameters:**
+
+- `message`: The message to send with channel, text, and optional formatting
+- `options`: Configuration including token, retry settings, and error handling
+
+**Example:**
+
+```typescript
+const response = await sendSlackMessage(
+  {
+    channel: '#general',
+    text: 'Hello from my app!',
+    username: 'My Bot',
+  },
+  {
+    config: {
+      token: 'xoxb-your-bot-token',
+      defaultChannel: '#general',
+    },
+    failSilently: true,
+  }
+)
+```
+
+#### `sendSlackWebhook(message: SlackWebhookMessage, config: SlackWebhookConfig, options?: object): Promise<SlackResponse>`
+
+Sends a message to Slack using a webhook.
+
+**Parameters:**
+
+- `message`: The message to send
+- `config`: Webhook configuration with URL and default settings
+- `options`: Optional retry and error handling settings
+
+#### `createSectionBlock(text: string, options?: object): SlackBlock`
+
+Creates a section block for formatted messages.
+
+#### `createButtonElement(text: string, value: string, options?: object): SlackElement`
+
+Creates a button element for interactive messages.
+
+#### `createActionBlock(elements: SlackElement[], blockId?: string): SlackBlock`
+
+Creates an actions block with buttons.
+
+#### `createSlackAttachment(options: object): SlackAttachment`
+
+Creates an attachment for rich message formatting.
+
+#### `new SlackNotifier(config: SlackConfig, options?: object)`
+
+Creates a SlackNotifier instance for convenient message management.
+
+**Methods:**
+
+- `sendMessage(text: string, channel?: string): Promise<SlackResponse>`
+- `sendSuccess(message: string, channel?: string): Promise<SlackResponse>`
+- `sendError(error: string, channel?: string): Promise<SlackResponse>`
+- `sendWarning(warning: string, channel?: string): Promise<SlackResponse>`
+- `sendFormattedMessage(blocks: SlackBlock[], channel?: string, fallbackText?: string): Promise<SlackResponse>`
 
 ### Pino Logger
 
