@@ -27,6 +27,7 @@ export {
   sendSlackMessage,
   sendSlackWebhook,
   createSectionBlock,
+  createDividerBlock,
   createButtonElement,
   createActionBlock,
   createSlackAttachment,

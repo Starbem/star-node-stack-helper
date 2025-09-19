@@ -7,7 +7,7 @@ A comprehensive helper library for Node.js applications that provides enterprise
 - **AWS Secrets Manager Integration**: Secure secret loading with retry logic and IAM role support
 - **Elasticsearch/OpenSearch Logging**: Enterprise-grade logging with transaction tracking
 - **Pino Logger Integration**: High-performance structured logging
-- **Slack Notifications**: Complete Slack integration with API and webhook support
+- **Slack Notifications**: Complete Slack integration with API and webhook support, enhanced block validation, and automatic error handling
 - **NestJS Compatibility**: Native integration with decorators, interceptors, guards, and exception filters
 - **Express Middleware**: Performance monitoring and transaction logging
 - **TypeScript Support**: Full type safety and IntelliSense support
@@ -331,7 +331,7 @@ const logger = createPinoLogger({
 
 ## 💬 Slack Notifications
 
-The library provides comprehensive Slack integration with support for both the official Slack API and webhooks, including formatted messages, interactive buttons, and attachments.
+The library provides comprehensive Slack integration with support for both the official Slack API and webhooks, including formatted messages, interactive buttons, and attachments. **Now with enhanced block validation and error handling to prevent "invalid_blocks" errors.**
 
 ### Basic Setup
 
@@ -421,13 +421,15 @@ await notifier.sendError('Critical error: Database connection failed')
 import {
   sendSlackMessage,
   createSectionBlock,
+  createDividerBlock,
   createButtonElement,
   createActionBlock,
 } from '@starbemtech/star-node-stack-helper'
 
 const blocks = [
   createSectionBlock('*🚀 New Deploy Completed!*', { type: 'mrkdwn' }),
-  createSectionBlock('', {
+  createDividerBlock(), // Use divider instead of empty section blocks
+  createSectionBlock('Deployment Details', {
     fields: [
       { type: 'mrkdwn', text: '*Environment:*' },
       { type: 'mrkdwn', text: 'Production' },
@@ -462,6 +464,41 @@ const response = await sendSlackMessage(
   }
 )
 ```
+
+### Enhanced Block Validation
+
+The library now includes automatic block validation and sanitization to prevent "invalid_blocks" errors:
+
+```typescript
+import { SlackNotifier, createSectionBlock } from '@starbemtech/star-node-stack-helper'
+
+const notifier = new SlackNotifier({
+  token: 'xoxb-your-bot-token-here',
+  defaultChannel: '#notifications',
+})
+
+// The sendFormattedMessage method now automatically:
+// 1. Validates block structure
+// 2. Sanitizes text content (removes control characters, escapes special chars)
+// 3. Truncates text that exceeds Slack's 3000 character limit
+// 4. Filters out invalid blocks
+// 5. Falls back to simple text message if all blocks are invalid
+
+await notifier.sendFormattedMessage([
+  createSectionBlock('*System Status*', { type: 'mrkdwn' }),
+  createSectionBlock('✅ All systems operational'), // Text is automatically sanitized
+  createSectionBlock(''), // Empty blocks are automatically handled
+])
+```
+
+#### Block Validation Features
+
+- **Text Sanitization**: Automatically removes control characters and escapes special characters for mrkdwn
+- **Length Validation**: Truncates text that exceeds Slack's 3000 character limit
+- **Structure Validation**: Ensures blocks have required properties and valid types
+- **Empty Block Handling**: Replaces empty section blocks with proper dividers
+- **Error Recovery**: Falls back to simple text messages if all blocks are invalid
+- **Detailed Logging**: Warns about filtered blocks for debugging
 
 ### Attachments
 
@@ -521,6 +558,48 @@ try {
 } catch (error) {
   console.error('Failed to send message after all attempts:', error)
 }
+```
+
+### Troubleshooting Common Issues
+
+#### "invalid_blocks" Error
+
+If you encounter the "invalid_blocks" error, the library now automatically handles most common causes:
+
+```typescript
+// ❌ Problematic code (now automatically fixed)
+const blocks = [
+  createSectionBlock(''), // Empty blocks are now handled
+  createSectionBlock('Very long text...'), // Text is automatically truncated
+  createSectionBlock('Text with special chars <>&'), // Characters are escaped
+]
+
+// ✅ Recommended approach
+const blocks = [
+  createSectionBlock('*Title*', { type: 'mrkdwn' }),
+  createDividerBlock(), // Use dividers for separation
+  createSectionBlock('Content with proper formatting'),
+]
+```
+
+#### Best Practices
+
+1. **Use `createDividerBlock()` instead of empty section blocks**
+2. **Keep text content under 3000 characters** (automatically handled)
+3. **Use proper mrkdwn formatting** for rich text
+4. **Handle errors gracefully** with `failSilently: true`
+
+```typescript
+const notifier = new SlackNotifier({
+  token: 'xoxb-your-token',
+  defaultChannel: '#notifications',
+}, {
+  failSilently: true, // Prevents crashes on Slack API errors
+  retryConfig: {
+    maxAttempts: 3,
+    delayMs: 1000,
+  },
+})
 ```
 
 ### Configuration
@@ -1387,7 +1466,11 @@ Sends a message to Slack using a webhook.
 
 #### `createSectionBlock(text: string, options?: object): SlackBlock`
 
-Creates a section block for formatted messages.
+Creates a section block for formatted messages. **Now includes automatic text sanitization and validation.**
+
+#### `createDividerBlock(): SlackBlock`
+
+Creates a divider block for visual separation. **Recommended for replacing empty section blocks.**
 
 #### `createButtonElement(text: string, value: string, options?: object): SlackElement`
 

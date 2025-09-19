@@ -18,6 +18,71 @@ const DEFAULT_RETRY_CONFIG = {
 }
 
 /**
+ * Provides user-friendly error messages for common Slack API errors.
+ *
+ * @param {string | undefined} error - The error code from Slack API.
+ * @returns {string} A user-friendly error message.
+ */
+function getSlackErrorMessage(error: string | undefined): string {
+  if (!error) return 'Unknown error from Slack API'
+
+  const errorMessages: Record<string, string> = {
+    not_in_channel:
+      'Bot is not in the channel. Add the bot to the channel or use a public channel.',
+    channel_not_found:
+      'Channel not found. Verify that the channel name is correct.',
+    invalid_auth:
+      'Invalid authentication token. Verify that the token is correct.',
+    account_inactive: 'Bot account is inactive. Check the bot settings.',
+    token_revoked: 'Token has been revoked. Generate a new token.',
+    no_permission:
+      'Bot does not have permission to send messages to this channel.',
+    is_archived: 'Channel is archived and cannot receive messages.',
+    msg_too_long: 'Message too long. Reduce the message size.',
+    rate_limited: 'Rate limit exceeded. Try again in a few seconds.',
+    fatal_error: 'Fatal Slack error. Try again later.',
+  }
+
+  return errorMessages[error] || `Slack error: ${error}`
+}
+
+/**
+ * Checks if the bot is a member of the specified channel.
+ *
+ * @param {string} channel - The channel name or ID.
+ * @param {SlackConfig} config - The Slack configuration.
+ * @returns {Promise<boolean>} True if the bot is in the channel, false otherwise.
+ */
+async function isBotInChannel(
+  channel: string,
+  config: SlackConfig
+): Promise<boolean> {
+  try {
+    const baseUrl = config.baseUrl || 'https://slack.com/api'
+    const response = await fetch(`${baseUrl}/conversations.info`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.token}`,
+      },
+      body: JSON.stringify({ channel }),
+    })
+
+    if (!response.ok) {
+      return false
+    }
+
+    const data = (await response.json()) as {
+      ok: boolean
+      channel?: { is_member?: boolean }
+    }
+    return data.ok && data.channel?.is_member === true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Validates the Slack configuration.
  *
  * @param {SlackConfig} config - The Slack configuration.
@@ -153,6 +218,24 @@ export async function sendSlackMessage(
   validateSlackConfig(options.config)
   validateSlackMessage(message)
 
+  // Check if bot is in the channel (optional check)
+  if (options.checkChannelMembership !== false) {
+    const isInChannel = await isBotInChannel(message.channel, options.config)
+    if (!isInChannel) {
+      const errorMessage = `Bot is not in the channel ${message.channel}. Add the bot to the channel or use a public channel.`
+      console.warn(errorMessage)
+
+      if (!options.failSilently) {
+        throw new Error(errorMessage)
+      }
+
+      return {
+        ok: false,
+        error: errorMessage,
+      }
+    }
+  }
+
   const retryConfig = options.retryConfig || DEFAULT_RETRY_CONFIG
   const baseUrl = options.config.baseUrl || 'https://slack.com/api'
 
@@ -191,7 +274,8 @@ export async function sendSlackMessage(
       const data = (await res.json()) as SlackResponse
 
       if (!data.ok) {
-        throw new Error(data.error || 'Unknown error from Slack API')
+        const errorMessage = getSlackErrorMessage(data.error)
+        throw new Error(errorMessage)
       }
 
       return data
@@ -307,6 +391,90 @@ export async function sendSlackWebhook(
 }
 
 /**
+ * Removes control characters from text.
+ *
+ * @param {string} text - Text to clean.
+ * @returns {string} Cleaned text.
+ */
+function removeControlCharacters(text: string): string {
+  return text
+    .split('')
+    .filter((char) => {
+      const code = char.charCodeAt(0)
+      return code >= 32 && code !== 127
+    })
+    .join('')
+}
+
+/**
+ * Validates and sanitizes text for Slack blocks.
+ *
+ * @param {string} text - Text to validate.
+ * @param {string} type - Text type ('plain_text' or 'mrkdwn').
+ * @returns {string} Sanitized text.
+ */
+function validateAndSanitizeText(
+  text: string,
+  type: 'plain_text' | 'mrkdwn'
+): string {
+  if (!text || text.trim() === '') {
+    return type === 'mrkdwn' ? ' ' : ' '
+  }
+
+  // Remove or replace problematic characters
+  let sanitized = removeControlCharacters(text)
+    .replace(/\uFEFF/g, '')
+    .trim()
+
+  // For mrkdwn, ensure proper escaping
+  if (type === 'mrkdwn') {
+    // Escape special characters that could break mrkdwn
+    sanitized = sanitized
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+  }
+
+  // Truncate if too long (Slack limit is 3000 characters for section text)
+  const maxLength = 3000
+  if (sanitized.length > maxLength) {
+    sanitized = sanitized.substring(0, maxLength - 3) + '...'
+  }
+
+  return sanitized || ' '
+}
+
+/**
+ * Validates a Slack block structure.
+ *
+ * @param {SlackBlock} block - Block to validate.
+ * @returns {boolean} True if valid, false otherwise.
+ */
+function validateSlackBlock(block: SlackBlock): boolean {
+  if (!block || typeof block !== 'object') {
+    return false
+  }
+
+  if (!block.type || typeof block.type !== 'string') {
+    return false
+  }
+
+  // For section blocks, validate text
+  if (block.type === 'section' && block.text) {
+    if (!block.text.type || !block.text.text) {
+      return false
+    }
+
+    const textLength = block.text.text.length
+    if (textLength === 0 || textLength > 3000) {
+      return false
+    }
+  }
+
+  return true
+}
+
+/**
  * Creates a section block for formatted Slack messages.
  *
  * @param {string} text - Block text.
@@ -322,13 +490,32 @@ export function createSectionBlock(
   text: string,
   options: { type?: 'plain_text' | 'mrkdwn'; fields?: SlackField[] } = {}
 ): SlackBlock {
+  const textType = options.type || 'mrkdwn'
+  const sanitizedText = validateAndSanitizeText(text, textType)
+
   return {
     type: 'section',
     text: {
-      type: options.type || 'mrkdwn',
-      text,
+      type: textType,
+      text: sanitizedText,
     },
     ...(options.fields && { fields: options.fields }),
+  }
+}
+
+/**
+ * Creates a divider block for visual separation.
+ *
+ * @returns {SlackBlock} Divider block.
+ *
+ * @example
+ * ```typescript
+ * const divider = createDividerBlock()
+ * ```
+ */
+export function createDividerBlock(): SlackBlock {
+  return {
+    type: 'divider',
   }
 }
 
@@ -483,11 +670,32 @@ export class SlackNotifier {
     channel?: string,
     fallbackText?: string
   ): Promise<SlackResponse> {
+    // Validate and filter blocks
+    const validBlocks = blocks.filter((block) => {
+      const isValid = validateSlackBlock(block)
+      if (!isValid) {
+        console.warn(
+          'Invalid block filtered out:',
+          JSON.stringify(block, null, 2)
+        )
+      }
+      return isValid
+    })
+
+    // If no valid blocks remain, send a simple text message instead
+    if (validBlocks.length === 0) {
+      console.warn('No valid blocks found, sending fallback text message')
+      return this.sendMessage(
+        fallbackText || 'Formatted message (blocks were invalid)',
+        channel
+      )
+    }
+
     return sendSlackMessage(
       {
         channel: channel || this.config.defaultChannel || '#general',
         text: fallbackText || 'Formatted message',
-        blocks,
+        blocks: validBlocks,
         ...(this.config.botName && { username: this.config.botName }),
       },
       {

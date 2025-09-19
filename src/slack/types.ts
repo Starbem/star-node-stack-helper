@@ -111,6 +111,7 @@ export interface SlackNotificationOptions {
     delayMs: number
   }
   failSilently?: boolean
+  checkChannelMembership?: boolean
 }
 
 export interface SlackWebhookConfig {
