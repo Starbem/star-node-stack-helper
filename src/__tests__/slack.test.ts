@@ -48,15 +48,6 @@ describe('Slack Module', () => {
         },
       }
 
-      // Mock the conversations.info call (channel membership check)
-      ;(fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          ok: true,
-          channel: { is_member: true },
-        }),
-      })
-
       // Mock the chat.postMessage call
       ;(fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
@@ -70,10 +61,11 @@ describe('Slack Module', () => {
 
       const result = await sendSlackMessage(message, {
         config: mockSlackConfig,
+        checkChannelMembership: false, // Disable channel membership check for tests
       })
 
       expect(result).toEqual(mockResponse)
-      expect(fetch).toHaveBeenCalledTimes(2)
+      expect(fetch).toHaveBeenCalledTimes(1) // Only chat.postMessage
     })
 
     it('should fail with invalid config', async () => {
@@ -248,15 +240,6 @@ describe('Slack Module', () => {
         ts: '1234567890.123456',
       }
 
-      // Mock the conversations.info call (channel membership check)
-      ;(fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          ok: true,
-          channel: { is_member: true },
-        }),
-      })
-
       // Mock the chat.postMessage call
       ;(fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
@@ -274,15 +257,6 @@ describe('Slack Module', () => {
         channel: '#test',
         ts: '1234567890.123456',
       }
-
-      // Mock the conversations.info call (channel membership check)
-      ;(fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          ok: true,
-          channel: { is_member: true },
-        }),
-      })
 
       // Mock the chat.postMessage call
       ;(fetch as jest.Mock).mockResolvedValueOnce({
@@ -302,15 +276,6 @@ describe('Slack Module', () => {
         ts: '1234567890.123456',
       }
 
-      // Mock the conversations.info call (channel membership check)
-      ;(fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          ok: true,
-          channel: { is_member: true },
-        }),
-      })
-
       // Mock the chat.postMessage call
       ;(fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
@@ -328,15 +293,6 @@ describe('Slack Module', () => {
         channel: '#test',
         ts: '1234567890.123456',
       }
-
-      // Mock the conversations.info call (channel membership check)
-      ;(fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          ok: true,
-          channel: { is_member: true },
-        }),
-      })
 
       // Mock the chat.postMessage call
       ;(fetch as jest.Mock).mockResolvedValueOnce({

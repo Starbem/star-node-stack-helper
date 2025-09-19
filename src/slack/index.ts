@@ -69,15 +69,28 @@ async function isBotInChannel(
     })
 
     if (!response.ok) {
+      console.warn(
+        `Failed to check channel membership for ${channel}: HTTP ${response.status}`
+      )
       return false
     }
 
     const data = (await response.json()) as {
       ok: boolean
       channel?: { is_member?: boolean }
+      error?: string
     }
-    return data.ok && data.channel?.is_member === true
-  } catch {
+
+    if (!data.ok) {
+      console.warn(`Slack API error checking channel ${channel}: ${data.error}`)
+      return false
+    }
+
+    const isMember = data.channel?.is_member === true
+    console.log(`Bot membership check for ${channel}: ${isMember}`)
+    return isMember
+  } catch (error) {
+    console.warn(`Error checking channel membership for ${channel}:`, error)
     return false
   }
 }
@@ -218,8 +231,7 @@ export async function sendSlackMessage(
   validateSlackConfig(options.config)
   validateSlackMessage(message)
 
-  // Check if bot is in the channel (optional check)
-  if (options.checkChannelMembership !== false) {
+  if (options.checkChannelMembership === true) {
     const isInChannel = await isBotInChannel(message.channel, options.config)
     if (!isInChannel) {
       const errorMessage = `Bot is not in the channel ${message.channel}. Add the bot to the channel or use a public channel.`

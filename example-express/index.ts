@@ -9,6 +9,11 @@ import {
   createHttpLogger,
   performanceLoggerMiddleware,
   pinoLogContext,
+  sendSlackMessage,
+  createButtonElement,
+  createSectionBlock,
+  createActionBlock,
+  SlackConfig,
 } from '../src'
 
 /**
@@ -468,6 +473,49 @@ app.get(
     })
   }
 )
+
+app.get('/slack-test', async (req, res) => {
+  const config: SlackConfig = {
+    token: 'your-slack-token',
+    defaultChannel: '#your-channel', // Optional
+    botName: 'Starbem Tech',
+  }
+
+  const blocks = [
+    createSectionBlock('🤝 *Job Renovação Parceiros*"', { type: 'mrkdwn' }),
+    createSectionBlock('✅ Planos de parceiros renovados com sucesso!', {
+      type: 'mrkdwn',
+    }),
+    createSectionBlock('', {
+      fields: [
+        { type: 'mrkdwn', text: '*Assinaturas renovadas:*' },
+        { type: 'mrkdwn', text: '10' },
+        { type: 'mrkdwn', text: '*Data de execução:*' },
+        { type: 'mrkdwn', text: '2025-09-19 10:00:00' },
+        { type: 'mrkdwn', text: '*Tempo de execução:*' },
+        { type: 'mrkdwn', text: '1000ms' },
+        { type: 'mrkdwn', text: '*Status:*' },
+        { type: 'mrkdwn', text: 'Sucesso' },
+      ],
+    }),
+  ]
+
+  const response = await sendSlackMessage(
+    {
+      channel: '#your-channel',
+      text: 'Job Renovação Parceiros realizado com sucesso!',
+      blocks,
+    },
+    {
+      config,
+    }
+  )
+
+  res.json({
+    message: 'Slack message sent successfully',
+    response,
+  })
+})
 
 // TODO: add secrets example
 app.get('/secrets', async (req, res) => {

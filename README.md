@@ -470,7 +470,10 @@ const response = await sendSlackMessage(
 The library now includes automatic block validation and sanitization to prevent "invalid_blocks" errors:
 
 ```typescript
-import { SlackNotifier, createSectionBlock } from '@starbemtech/star-node-stack-helper'
+import {
+  SlackNotifier,
+  createSectionBlock,
+} from '@starbemtech/star-node-stack-helper'
 
 const notifier = new SlackNotifier({
   token: 'xoxb-your-bot-token-here',
@@ -582,24 +585,65 @@ const blocks = [
 ]
 ```
 
+#### Channel Membership Check
+
+The library now includes an optional channel membership check to verify if the bot is in the channel before sending messages:
+
+```typescript
+// Enable channel membership check (disabled by default)
+await sendSlackMessage(
+  {
+    channel: '#general',
+    text: 'Hello!',
+  },
+  {
+    config: {
+      token: 'xoxb-your-token',
+    },
+    checkChannelMembership: true, // Enable channel check
+    failSilently: true,
+  }
+)
+
+// Disable channel membership check (default behavior)
+await sendSlackMessage(
+  {
+    channel: '#general',
+    text: 'Hello!',
+  },
+  {
+    config: {
+      token: 'xoxb-your-token',
+    },
+    checkChannelMembership: false, // Disable channel check (default)
+  }
+)
+```
+
+**Note:** The `SlackNotifier` class has channel membership check disabled by default for better performance and to avoid unnecessary API calls.
+
 #### Best Practices
 
 1. **Use `createDividerBlock()` instead of empty section blocks**
 2. **Keep text content under 3000 characters** (automatically handled)
 3. **Use proper mrkdwn formatting** for rich text
 4. **Handle errors gracefully** with `failSilently: true`
+5. **Disable channel membership check** if you're sure the bot is in the channel
 
 ```typescript
-const notifier = new SlackNotifier({
-  token: 'xoxb-your-token',
-  defaultChannel: '#notifications',
-}, {
-  failSilently: true, // Prevents crashes on Slack API errors
-  retryConfig: {
-    maxAttempts: 3,
-    delayMs: 1000,
+const notifier = new SlackNotifier(
+  {
+    token: 'xoxb-your-token',
+    defaultChannel: '#notifications',
   },
-})
+  {
+    failSilently: true, // Prevents crashes on Slack API errors
+    retryConfig: {
+      maxAttempts: 3,
+      delayMs: 1000,
+    },
+  }
+)
 ```
 
 ### Configuration
@@ -1433,7 +1477,14 @@ Sends a message to Slack using the official API.
 **Parameters:**
 
 - `message`: The message to send with channel, text, and optional formatting
-- `options`: Configuration including token, retry settings, and error handling
+- `options`: Configuration including token, retry settings, error handling, and channel membership check
+
+**Options:**
+
+- `config`: Slack configuration with token and default settings
+- `retryConfig`: Retry configuration for failed requests
+- `failSilently`: Whether to throw errors or return error responses
+- `checkChannelMembership`: Whether to verify bot is in channel before sending (default: false)
 
 **Example:**
 

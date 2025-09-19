@@ -37,8 +37,8 @@ async function exemploMensagemSimples() {
 // Example 2: Sending a formatted message with blocks
 async function exemploMensagemFormatada() {
   const config: SlackConfig = {
-    token: 'xoxb-seu-bot-token-aqui',
-    defaultChannel: '#general',
+    token: 'your-slack-token',
+    defaultChannel: '#your-channel',
   }
 
   const blocks = [
@@ -82,6 +82,8 @@ async function exemploMensagemFormatada() {
 
   console.log('Resposta:', response)
 }
+
+exemploMensagemFormatada()
 
 // Example 3: Sending a message via webhook
 async function exemploWebhook() {
