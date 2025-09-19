@@ -22,6 +22,17 @@ export {
   logContext as pinoLogContext,
 } from './logger-pino'
 
+// Slack Notifications
+export {
+  sendSlackMessage,
+  sendSlackWebhook,
+  createSectionBlock,
+  createButtonElement,
+  createActionBlock,
+  createSlackAttachment,
+  SlackNotifier,
+} from './slack'
+
 // NestJS Integration
 export {
   Log,
@@ -46,6 +57,22 @@ export type {
 export type { LoggerConfig, LogLevel, LogTransaction } from './logger/types'
 
 export type { PinoLoggerConfig } from './logger-pino/types'
+
+export type {
+  SlackConfig,
+  SlackMessage,
+  SlackResponse,
+  SlackNotificationOptions,
+  SlackWebhookConfig,
+  SlackWebhookMessage,
+  SlackBlock,
+  SlackText,
+  SlackField,
+  SlackElement,
+  SlackOption,
+  SlackAttachment,
+  SlackAttachmentField,
+} from './slack/types'
 
 export type {
   NestJSLogContext,
