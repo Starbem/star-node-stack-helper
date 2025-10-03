@@ -16,6 +16,7 @@ export class ElasticLogger {
   private service: string
   private environment: string
   private region: string
+  private awsService: 'es' | 'aoss'
   private readonly timeout = 30000
 
   constructor(config: LoggerConfig) {
@@ -24,6 +25,7 @@ export class ElasticLogger {
     this.service = config.service
     this.environment = config.environment
     this.region = config.region
+    this.awsService = config.awsService || 'aoss'
 
     const clientConfig: ClientOptions = {
       node: config.node,
@@ -40,7 +42,7 @@ export class ElasticLogger {
         clientConfig,
         AwsSigv4Signer({
           region: this.region,
-          service: 'aoss',
+          service: this.awsService,
           getCredentials: () => {
             const credentialsProvider = defaultProvider()
             return credentialsProvider()

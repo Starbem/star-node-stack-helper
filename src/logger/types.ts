@@ -1,6 +1,7 @@
 export interface LoggerConfig {
   node: string
   authType?: 'aws' | 'basic'
+  awsService?: 'es' | 'aoss'
   username?: string
   password?: string
   index: string
