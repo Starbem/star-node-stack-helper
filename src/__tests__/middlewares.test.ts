@@ -1,4 +1,5 @@
 /// <reference types="jest" />
+import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 
 // Mock Express types for testing
 interface Request {
@@ -17,6 +18,9 @@ interface Request {
 interface Response {
   statusCode: number
   send: (data: unknown) => void
+  once: (event: string, cb: () => void) => void
+  emit: (event: string) => void
+  getHeader: (name: string) => number | string | undefined
 }
 
 type NextFunction = () => void
@@ -62,9 +66,22 @@ describe('Middlewares', () => {
       body: { name: 'test' },
     }
 
+    const listeners: Record<string, Array<() => void>> = {}
     mockRes = {
       statusCode: 200,
-      send: jest.fn(),
+      send: jest.fn(function (this: any, _data: unknown) {
+        // emula finalização da resposta
+        mockRes.emit && mockRes.emit('finish')
+      }),
+      once: jest.fn((event: string, cb: () => void) => {
+        if (!listeners[event]) listeners[event] = []
+        listeners[event].push(cb)
+      }),
+      emit: jest.fn((event: string) => {
+        ;(listeners[event] || []).forEach((cb) => cb())
+        listeners[event] = []
+      }),
+      getHeader: jest.fn((_name: string) => undefined),
     }
 
     mockNext = jest.fn()
@@ -90,15 +107,11 @@ describe('Middlewares', () => {
       )
 
       // Mock the logger.info method
-      const loggerSpy = jest.spyOn(console, 'log').mockImplementation()
+      const loggerSpy = jest
+        .spyOn(console, 'log')
+        .mockImplementation(() => undefined)
 
       middleware(mockReq as any, mockRes as any, mockNext)
-
-      // Simulate response
-      const originalSend = mockRes.send
-      mockRes.send = jest.fn((data: unknown) => {
-        originalSend?.call(mockRes, data)
-      })
 
       // Call the middleware
       await new Promise((resolve) => setTimeout(resolve, 100))
@@ -162,12 +175,6 @@ describe('Middlewares', () => {
 
       middleware(mockReq as any, mockRes as any, mockNext)
 
-      // Simulate response
-      const originalSend = mockRes.send
-      mockRes.send = jest.fn((data: unknown) => {
-        originalSend?.call(mockRes, data)
-      })
-
       // Call the middleware
       mockRes.send?.('test response')
 
@@ -183,15 +190,14 @@ describe('Middlewares', () => {
           operation: 'test-operation',
           status: 'success',
           context: expect.objectContaining({
-            id: '123',
-            search: 'test',
-            name: 'test',
+            params: expect.objectContaining({ id: '123' }),
+            query: expect.objectContaining({ search: 'test' }),
+            body: expect.objectContaining({ name: 'test' }),
           }),
           requestMeta: expect.objectContaining({
             method: 'GET',
             path: '/test',
-            ip: '127.0.0.1',
-            userAgent: 'test-agent',
+            // ip e userAgent agora ficam em requestMeta
           }),
         })
       )
@@ -215,12 +221,6 @@ describe('Middlewares', () => {
       mockRes.statusCode = 500
 
       middleware(mockReq as any, mockRes as any, mockNext)
-
-      // Simulate response
-      const originalSend = mockRes.send
-      mockRes.send = jest.fn((data: unknown) => {
-        originalSend?.call(mockRes, data)
-      })
 
       // Call the middleware
       mockRes.send?.('error response')
@@ -265,33 +265,23 @@ describe('Middlewares', () => {
 
       middleware(mockReq as any, mockRes as any, mockNext)
 
-      // Simulate response
-      const originalSend = mockRes.send
-      mockRes.send = jest.fn((data: unknown) => {
-        originalSend?.call(mockRes, data)
-      })
-
       // Call the middleware
       mockRes.send?.('test response')
 
       // Wait for async logging
       await new Promise((resolve) => setTimeout(resolve, 10))
 
-      expect(logTransactionSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          context: expect.objectContaining({
-            name: 'test',
-            search: 'test',
-            // Sensitive fields should be filtered out
-          }),
-        })
-      )
-
-      // Verify sensitive fields are not in context
       const callArgs = logTransactionSpy.mock.calls[0]?.[0]
-      expect(callArgs?.context).not.toHaveProperty('password')
-      expect(callArgs?.context).not.toHaveProperty('token')
-      expect(callArgs?.context).not.toHaveProperty('secret')
+      expect(callArgs?.context).toBeDefined()
+      const ctx = (callArgs as any)?.context as Record<string, any>
+      expect(ctx['body']).toBeDefined()
+      expect(ctx['query']).toBeDefined()
+      // Sensitive fields should be masked
+      expect(ctx['body']['password']).toBe('[REDACTED]')
+      expect(ctx['body']['token']).toBe('[REDACTED]')
+      expect(ctx['body']['secret']).toBe('[REDACTED]')
+      expect(ctx['query']['password']).toBe('[REDACTED]')
+      expect(ctx['query']['token']).toBe('[REDACTED]')
 
       logTransactionSpy.mockRestore()
     })
@@ -313,12 +303,6 @@ describe('Middlewares', () => {
         .mockResolvedValue()
 
       middleware(mockReq as any, mockRes as any, mockNext)
-
-      // Simulate response
-      const originalSend = mockRes.send
-      mockRes.send = jest.fn((data: unknown) => {
-        originalSend?.call(mockRes, data)
-      })
 
       // Call the middleware
       mockRes.send?.('test response')

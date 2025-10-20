@@ -1048,11 +1048,12 @@ app.post(
   '/api/users',
   transactionLoggerMiddleware('user-service', 'create-user', elasticLogger),
   (req, res) => {
-    // Middleware automatically captures:
-    // - Request metadata (method, path, IP, user agent)
-    // - Response status and timing
-    // - Request/response body (with sensitive data filtering)
-    // - Transaction ID generation
+    // Middleware automatically captures (agora via evento 'finish'):
+    // - Request metadata (method, path, baseUrl, route, host, ip/x-forwarded-for, userAgent, httpVersion)
+    // - Context enriquecido com params/query/body sanitizados (campos sensíveis mascarados) e com limite de tamanho + hash
+    // - Headers relevantes (x-user-id, x-platform, authorization [mascarado], content-type, etc.)
+    // - Status/timing e responseSize (quando disponível via content-length)
+    // - Geração/propagação de transactionId
 
     const user = createUser(req.body)
     res.status(201).json({
@@ -1072,6 +1073,12 @@ app.use('/api', (req, res, next) => {
   )
 })
 ```
+
+#### Notas
+
+- O middleware usa `res.once('finish')` para garantir logging mesmo quando a resposta é enviada por `res.end` ou streams.
+- O objeto `context` inclui `params`, `query` e `body` sanitizados de forma recursiva (campos sensíveis como `password`, `token`, `secret`, etc. são mascarados) e serialização limitada para evitar logs gigantes.
+- Para propagar o identificador para clientes, combine com o middleware `addTransactionId`, que adiciona o header `X-Transaction-ID` à resposta.
 
 ### Transaction ID Middleware
 

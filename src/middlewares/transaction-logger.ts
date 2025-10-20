@@ -1,8 +1,8 @@
 import { ElasticLogger } from '../logger'
 import { LogTransaction } from '../logger/types'
 import { Request, Response, NextFunction } from 'express'
+import crypto from 'crypto'
 
-// Extend Express Request interface
 declare global {
   namespace Express {
     interface Request {
@@ -25,63 +25,140 @@ export const transactionLoggerMiddleware = (
     const transactionId =
       (req.headers['x-transaction-id'] as string) ||
       (req.headers['x-request-id'] as string) ||
-      `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      `tx_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
 
     req.transactionId = transactionId
+
+    const SENSITIVE_KEYS = new Set<string>([
+      'password',
+      'newPassword',
+      'token',
+      'secret',
+      'authorization',
+      'cpf',
+      'ssn',
+      'creditCard',
+      'cvv',
+      'pin',
+    ])
+
+    const sanitize = (value: unknown, depth = 0): unknown => {
+      if (depth > 6) return '[DEPTH_LIMIT]'
+      if (value === null || typeof value !== 'object') return value
+      if (Array.isArray(value)) {
+        return value.slice(0, 100).map((v) => sanitize(v, depth + 1))
+      }
+      const obj = value as Record<string, unknown>
+      const out: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(obj)) {
+        if (SENSITIVE_KEYS.has(k)) {
+          out[k] = '[REDACTED]'
+        } else {
+          out[k] = sanitize(v, depth + 1)
+        }
+      }
+      return out
+    }
+
+    const toLimitedJson = (obj: unknown, maxBytes = 64 * 1024): string => {
+      try {
+        const s = JSON.stringify(obj)
+        if (Buffer.byteLength(s, 'utf8') <= maxBytes) return s
+        const preview = s.slice(0, maxBytes)
+        const hash = crypto.createHash('sha256').update(s).digest('hex')
+        return `${preview}...[TRUNCATED:${hash}]`
+      } catch {
+        return '[UNSERIALIZABLE]'
+      }
+    }
 
     const requestMeta = {
       method: req.method,
       path: req.originalUrl,
-      ...(req.ip || req.socket.remoteAddress
-        ? { ip: req.ip || req.socket.remoteAddress }
-        : {}),
-      ...(req.get('User-Agent') ? { userAgent: req.get('User-Agent') } : {}),
+      baseUrl: req.baseUrl,
+      route: (req as any).route?.path,
+      host: req.get('host'),
+      referrer: req.get('referer') || req.get('referrer'),
+      ip: req.ip || req.socket.remoteAddress,
+      xForwardedFor: req.get('x-forwarded-for'),
+      userAgent: req.get('User-Agent'),
+      httpVersion: req.httpVersion,
     }
 
-    const originalSend = res.send
-    res.send = function (data: unknown) {
+    const relevantHeaders = [
+      'x-user-id',
+      'x-appointment-id',
+      'x-platform',
+      'x-tenant-id',
+      'x-locale',
+      'x-correlation-id',
+      'x-trace-id',
+      'x-parent-span-id',
+      'x-span-id',
+      'authorization',
+      'content-type',
+      'accept',
+    ]
+
+    const headerContext: Record<string, unknown> = {}
+    for (const h of relevantHeaders) {
+      const v = req.get(h)
+      if (v) headerContext[h] = h === 'authorization' ? '[REDACTED]' : v
+    }
+
+    const paramsSan = sanitize(req.params || {})
+    const querySan = sanitize(req.query || {})
+    const bodySan = typeof req.body === 'object' ? sanitize(req.body) : req.body
+
+    const requestPayload = {
+      params: paramsSan,
+      query: querySan,
+      body: bodySan,
+      paramsStr: toLimitedJson(paramsSan),
+      queryStr: toLimitedJson(querySan),
+      bodyStr: toLimitedJson(bodySan),
+      contentLength: req.get('content-length'),
+    }
+
+    res.once('finish', () => {
       const duration = Date.now() - startTime
       const status = res.statusCode >= 400 ? 'fail' : 'success'
 
-      const context: Record<string, unknown> = {}
-
-      if (req.params) {
-        Object.assign(context, req.params)
+      const resContentLengthHeader = res.getHeader('content-length')
+      const responseSizeValue =
+        typeof resContentLengthHeader === 'string'
+          ? parseInt(resContentLengthHeader, 10)
+          : typeof resContentLengthHeader === 'number'
+            ? resContentLengthHeader
+            : undefined
+      const responseMeta: {
+        statusCode: number
+        data?: unknown
+        responseSize?: number
+      } = {
+        statusCode: res.statusCode,
+        ...(typeof responseSizeValue === 'number'
+          ? { responseSize: responseSizeValue }
+          : {}),
       }
 
-      if (req.query) {
-        const filteredQuery = { ...req.query }
-        delete filteredQuery['token']
-        delete filteredQuery['password']
-        delete filteredQuery['newPassword']
-        delete filteredQuery['secret']
-        Object.assign(context, filteredQuery)
+      const context: Record<string, unknown> = {
+        ...headerContext,
+        ...requestPayload,
+        trace: {
+          requestId: req.headers['x-request-id'],
+          transactionId,
+          traceId: req.headers['x-trace-id'],
+          parentSpanId: req.headers['x-parent-span-id'],
+          spanId: req.headers['x-span-id'],
+        },
+        env: {
+          nodeEnv: process.env['NODE_ENV'],
+          serviceVersion: process.env['npm_package_version'],
+          podName: process.env['HOSTNAME'],
+          region: process.env['AWS_REGION'] || process.env['GCP_REGION'],
+        },
       }
-
-      if (req.body && typeof req.body === 'object') {
-        const filteredBody = { ...req.body }
-        delete filteredBody['password']
-        delete filteredBody['newPassword']
-        delete filteredBody['token']
-        delete filteredBody['secret']
-        Object.assign(context, filteredBody)
-      }
-
-      const relevantHeaders = [
-        'x-user-id',
-        'x-appointment-id',
-        'x-platform',
-        'authorization',
-        'content-type',
-        'accept',
-      ]
-
-      relevantHeaders.forEach((header) => {
-        const value = req.get(header)
-        if (value) {
-          context[header] = header === 'authorization' ? '[REDACTED]' : value
-        }
-      })
 
       const transactionData: LogTransaction = {
         name: operation,
@@ -92,11 +169,7 @@ export const transactionLoggerMiddleware = (
         duration,
         context,
         requestMeta,
-        responseMeta: {
-          statusCode: res.statusCode,
-          data: data as unknown,
-          responseSize: (data as string)?.length || 0,
-        },
+        responseMeta,
       }
 
       setImmediate(async () => {
@@ -111,9 +184,7 @@ export const transactionLoggerMiddleware = (
           })
         }
       })
-
-      return originalSend.call(this, data)
-    }
+    })
 
     next()
   }
@@ -128,7 +199,7 @@ export const addTransactionId = (
     req.transactionId =
       (req.headers['x-transaction-id'] as string) ||
       (req.headers['x-request-id'] as string) ||
-      `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      `tx_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
   }
 
   res.setHeader('X-Transaction-ID', req.transactionId)
