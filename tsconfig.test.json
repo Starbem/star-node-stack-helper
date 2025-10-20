@@ -5,16 +5,11 @@
       "jest",
       "node"
     ],
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "noImplicitAny": false
   },
   "include": [
-    "src/**/*",
     "src/**/*.test.ts",
     "src/**/*.spec.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "exclude": []
 }
