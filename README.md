@@ -1058,7 +1058,7 @@ app.post(
     const user = createUser(req.body)
     res.status(201).json({
       user,
-      transactionId: req.transactionId, // Available on request object
+      transactionId: req.transactionId,
     })
   }
 )
