@@ -76,7 +76,7 @@ export const transactionLoggerMiddleware = (
       method: req.method,
       path: req.originalUrl,
       baseUrl: req.baseUrl,
-      route: (req as any).route?.path,
+      route: (req as { route?: { path?: string } }).route?.path,
       host: req.get('host'),
       referrer: req.get('referer') || req.get('referrer'),
       ip: req.ip || req.socket.remoteAddress,

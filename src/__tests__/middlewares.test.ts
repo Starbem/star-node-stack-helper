@@ -77,9 +77,9 @@ describe('Middlewares', () => {
         if (!listeners[event]) listeners[event] = []
         listeners[event].push(cb)
       }),
-      emit: jest.fn((event: string) => {
-        ;(listeners[event] || []).forEach((cb) => cb())
-        listeners[event] = []
+      emit: jest.fn((_event: string) => {
+        ;(listeners[_event] || []).forEach((cb) => cb())
+        listeners[_event] = []
       }),
       getHeader: jest.fn((_name: string) => undefined),
     }
