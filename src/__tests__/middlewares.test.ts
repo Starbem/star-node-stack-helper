@@ -69,9 +69,10 @@ describe('Middlewares', () => {
     const listeners: Record<string, Array<() => void>> = {}
     mockRes = {
       statusCode: 200,
-      send: jest.fn(function (this: any, _data: unknown) {
+      send: jest.fn(function (this: any, data: unknown) {
+        void data
         // emula finalização da resposta
-        mockRes.emit && mockRes.emit('finish')
+        if (mockRes.emit) mockRes.emit('finish')
       }),
       once: jest.fn((event: string, cb: () => void) => {
         if (!listeners[event]) listeners[event] = []
@@ -81,7 +82,7 @@ describe('Middlewares', () => {
         ;(listeners[_event] || []).forEach((cb) => cb())
         listeners[_event] = []
       }),
-      getHeader: jest.fn((_name: string) => undefined),
+      getHeader: jest.fn(() => undefined),
     }
 
     mockNext = jest.fn()
