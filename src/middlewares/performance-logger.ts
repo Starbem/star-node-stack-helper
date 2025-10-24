@@ -4,7 +4,7 @@ import { Request, Response, NextFunction } from 'express'
 export const performanceLoggerMiddleware = (
   microservice: string,
   operation: string,
-  environment: 'development' | 'staging' | 'production' | 'test'
+  environment: 'development' | 'staging' | 'production' | 'local' | 'test'
 ) => {
   const logger = createPinoLogger({
     serviceName: microservice,

@@ -1,6 +1,6 @@
 export interface PinoLoggerConfig {
   serviceName: string
-  environment?: 'development' | 'staging' | 'production' | 'test'
+  environment?: 'development' | 'staging' | 'production' | 'local' | 'test'
   logLevel?: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
   customSilentRoutes?: string[]
   customRedactPaths?: string[]
