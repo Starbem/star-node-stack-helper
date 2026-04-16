@@ -9,7 +9,12 @@ export interface NestJSLogContext {
   [key: string]: unknown
 }
 
-export interface PinoLogger {
+/**
+ * Generic structured log writer interface.
+ * Implemented by both createPinoLogWriter (Pino-backed) and the
+ * default NestJS Logger wrapper used for backward compatibility.
+ */
+export interface LogWriter {
   info: (message: string, context?: Record<string, unknown>) => void
   warn: (message: string, context?: Record<string, unknown>) => void
   error: (message: string, context?: Record<string, unknown>) => void
@@ -18,22 +23,31 @@ export interface PinoLogger {
   fatal: (message: string, context?: Record<string, unknown>) => void
 }
 
+/** @deprecated Use LogWriter instead. Kept for backward compatibility. */
+export type PinoLogger = LogWriter
+
 export interface LogInterceptorOptions {
   skipRequestLogging?: boolean
   skipResponseLogging?: boolean
   logLevel?: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
   customContext?: (context: ExecutionContext) => Record<string, unknown>
+  /** Structured log writer. When omitted, falls back to Nest built-in Logger. */
+  logWriter?: LogWriter
 }
 
 export interface LogGuardOptions {
   logLevel?: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
   customContext?: (context: ExecutionContext) => Record<string, unknown>
+  /** Structured log writer. When omitted, falls back to Nest built-in Logger. */
+  logWriter?: LogWriter
 }
 
 export interface LogExceptionFilterOptions {
   logLevel?: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
   customContext?: (
     exception: unknown,
-    host: ArgumentsHost
+    host: ArgumentsHost,
   ) => Record<string, unknown>
+  /** Structured log writer. When omitted, falls back to Nest built-in Logger. */
+  logWriter?: LogWriter
 }

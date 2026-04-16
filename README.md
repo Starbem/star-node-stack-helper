@@ -1,1725 +1,691 @@
-# Star Node Stack Helper
+# @starbemtech/star-node-stack-helper — Logging
 
-A comprehensive helper library for Node.js applications that provides enterprise-grade utilities for AWS Secrets Manager integration, Elasticsearch/OpenSearch logging, Slack notifications, Express.js middleware, and NestJS integration with advanced features.
+Logging estruturado JSON para APIs Node.js (NestJS, Express, Fastify) integrado com Datadog Agent no EKS.
 
-## 🚀 Features
+## Sumário
 
-- **AWS Secrets Manager Integration**: Secure secret loading with retry logic and IAM role support
-- **Elasticsearch/OpenSearch Logging**: Enterprise-grade logging with transaction tracking
-- **Pino Logger Integration**: High-performance structured logging
-- **Slack Notifications**: Complete Slack integration with API and webhook support, enhanced block validation, and automatic error handling
-- **NestJS Compatibility**: Native integration with decorators, interceptors, guards, and exception filters
-- **Express Middleware**: Performance monitoring and transaction logging
-- **TypeScript Support**: Full type safety and IntelliSense support
-- **AWS IAM Integration**: Seamless authentication with AWS services
+- [Como funciona](#como-funciona)
+- [Instalação](#instalacao)
+- [Regra crítica: dd-trace antes do Pino](#regra-critica-dd-trace-antes-do-pino)
+- [NestJS](#nestjs)
+- [Express](#express)
+- [Fastify](#fastify)
+- [Logar dentro de services e handlers](#logar-dentro-de-services-e-handlers)
+- [Modos de correlação com traces](#modos-de-correlacao-com-traces)
+- [Configuração completa](#configuracao-completa)
+- [Env vars no Kubernetes](#env-vars-no-kubernetes)
+- [Checklist de validação](#checklist-de-validacao)
+- [Troubleshooting](#troubleshooting)
+- [Referência da API](#referencia-da-api)
 
-## 📦 Installation
+---
+
+## Como funciona
+
+```
+API (NestJS / Express / Fastify)
+  └── createPinoLogger → stdout JSON (uma linha por registro)
+        ├── message   — texto do log
+        ├── level     — info | warn | error | debug | trace | fatal
+        ├── time      — ISO 8601
+        ├── service   — DD_SERVICE → SERVICE_NAME → 'app'
+        ├── env       — DD_ENV → NODE_ENV → 'development'
+        ├── version   — DD_VERSION (omitido quando não definido)
+        └── dd.trace_id / dd.span_id  (quando correlationMode: 'datadog')
+
+Datadog Agent (containerCollectAll: true)
+  └── coleta stdout → Log Explorer + correlação com APM
+```
+
+Exemplo de saída JSON em produção:
+
+```json
+{
+  "level": "info",
+  "time": "2025-04-15T14:32:01.123Z",
+  "service": "partner-service",
+  "env": "production",
+  "version": "1.4.2",
+  "message": "User created successfully",
+  "userId": "usr_abc123",
+  "dd": {
+    "trace_id": "8765432198765432",
+    "span_id": "1234567812345678",
+    "service": "partner-service",
+    "env": "production",
+    "version": "1.4.2"
+  }
+}
+```
+
+---
+
+## Instalação
 
 ```bash
-npm install @starbemtech/star-node-stack-helper
-# or
-pnpm add @starbemtech/star-node-stack-helper
-# or
-yarn add @starbemtech/star-node-stack-helper
+pnpm add @starbemtech/star-node-stack-helper pino pino-http
 ```
 
-## 🔧 Requirements
+Para correlação com APM Datadog:
 
-- Node.js >= 18
-- TypeScript (optional but recommended)
-
-## 📚 Table of Contents
-
-- [AWS Secrets Manager](#aws-secrets-manager)
-- [Elasticsearch/OpenSearch Logging](#elasticsearchopensearch-logging)
-- [Pino Logger](#pino-logger)
-- [Slack Notifications](#slack-notifications)
-- [NestJS Compatibility](#nestjs-compatibility)
-- [Express Middleware](#express-middleware)
-- [TypeScript Types](#typescript-types)
-- [Examples](#examples)
-- [API Reference](#api-reference)
-
-## 🔐 AWS Secrets Manager
-
-### Basic Usage
-
-```typescript
-import {
-  loadSecrets,
-  testSavedSecrets,
-  isRunningOnAWS,
-  getAWSRegion,
-} from '@starbemtech/star-node-stack-helper'
-
-// Load secrets from AWS Secrets Manager
-const secrets = await loadSecrets({
-  region: 'us-east-1',
-  secretName: ['prod/database/credentials', 'prod/api/keys'],
-})
-
-// Test if secrets were loaded correctly
-testSavedSecrets()
-
-// Check if running on AWS
-const isAWS = isRunningOnAWS() // true if running on AWS Lambda or EC2
-
-// Get AWS region
-const region = getAWSRegion() // 'us-east-1' or undefined
+```bash
+pnpm add dd-trace
 ```
 
-### Advanced Configuration
+Para desenvolvimento local com formatação colorida (opcional):
 
-```typescript
-import {
-  loadSecrets,
-  SecretConfig,
-  RetryConfig,
-} from '@starbemtech/star-node-stack-helper'
-
-const retryConfig: RetryConfig = {
-  maxRetries: 3,
-  retryDelay: 1000,
-  exponentialBackoff: true,
-}
-
-const secretConfig: SecretConfig = {
-  region: 'us-east-1',
-  secretName: ['prod/database/credentials'],
-  retry: retryConfig,
-  credentials: {
-    accessKeyId: 'your-access-key',
-    secretAccessKey: 'your-secret-key',
-  },
-}
-
-const secrets = await loadSecrets(secretConfig)
+```bash
+pnpm add -D pino-pretty
 ```
 
-### Environment Variables
+---
 
-After loading secrets, they are automatically set as environment variables:
+## Regra crítica: dd-trace antes do Pino
 
-```typescript
-// If secret contains: { "DB_HOST": "localhost", "DB_PORT": "5432" }
-// These become available as:
-console.log(process.env.DB_HOST) // 'localhost'
-console.log(process.env.DB_PORT) // '5432'
-```
+Para que `dd.trace_id` e `dd.span_id` apareçam nos logs, o `dd-trace` **deve ser inicializado antes de qualquer import de `pino`** — inclusive o import desta lib.
 
-## 📊 Elasticsearch/OpenSearch Logging
-
-### Basic Setup
+Crie um arquivo dedicado e importe-o como **primeira linha** do entrypoint:
 
 ```typescript
-import {
-  ElasticLogger,
-  LoggerConfig,
-} from '@starbemtech/star-node-stack-helper'
+// src/tracing.ts
+import ddTrace from 'dd-trace'
 
-const config: LoggerConfig = {
-  node: 'https://your-opensearch-cluster.us-east-1.es.amazonaws.com',
-  service: 'my-service',
-  environment: 'production',
-  index: 'application-logs',
-  region: 'us-east-1',
-  authType: 'aws', // or 'basic' with username/password
-}
-
-const logger = new ElasticLogger(config)
-```
-
-### Logging Messages
-
-```typescript
-// Basic logging
-await logger.log('info', 'User logged in successfully', {
-  userId: '123',
-  sessionId: 'sess_456',
-  ip: '192.168.1.1',
-})
-
-// Different log levels
-await logger.log('debug', 'Debug information', { step: 'validation' })
-await logger.log('warn', 'Warning message', { threshold: 80 })
-await logger.log('error', 'Error occurred', {
-  error: 'Database connection failed',
+ddTrace.init({
+  // DD_SERVICE, DD_ENV, DD_VERSION lidos das env vars automaticamente
+  logInjection: false,   // a lib cuida da injeção via mixin (correlationMode: 'datadog')
+  runtimeMetrics: true,
 })
 ```
 
-### Transaction Logging
-
 ```typescript
-import { LogTransaction } from '@starbemtech/star-node-stack-helper'
+// src/main.ts ou src/server.ts
+import './tracing'   // ← SEMPRE A PRIMEIRA LINHA
 
-const transaction: LogTransaction = {
-  name: 'user-registration',
-  microservice: 'auth-service',
-  operation: 'create-user',
-  status: 'success',
-  duration: 1500,
-  context: {
-    userId: '123',
-    email: 'user@example.com',
-    plan: 'premium',
-  },
-  requestMeta: {
-    method: 'POST',
-    path: '/api/users',
-    ip: '192.168.1.1',
-    userAgent: 'Mozilla/5.0...',
-  },
-}
-
-await logger.logTransaction(transaction)
+// a partir daqui: qualquer import de pino ou da lib
+import { createPinoLogger } from '@starbemtech/star-node-stack-helper'
 ```
 
-### Searching Logs
+Se não usar `dd-trace`, simplesmente não crie o `tracing.ts` e omita o import.
+
+---
+
+## NestJS
+
+### Bootstrap (main.ts)
 
 ```typescript
-// Search system logs
-const systemLogs = await logger.getSystemLogs('user login')
+// src/main.ts
+import './tracing'   // ← PRIMEIRO, antes de tudo
 
-// Search transaction logs
-const transactionLogs = await logger.getLogsTransactions('user-registration')
-
-// Multiple queries
-const logs = await logger.getSystemLogs(['error', 'database', 'timeout'])
-```
-
-### Health Check and Maintenance
-
-```typescript
-// Check cluster health
-const isHealthy = await logger.healthCheck()
-
-// Test connection
-await logger.testConnection()
-
-// Flush indices
-await logger.flush()
-
-// Recreate index (useful for schema changes)
-await logger.recreateIndex()
-```
-
-## 🎯 Pino Logger
-
-### Basic Setup
-
-```typescript
+import { NestFactory } from '@nestjs/core'
 import {
   createPinoLogger,
-  createHttpLogger,
-  pinoLogContext,
+  createNestPinoLoggerService,
 } from '@starbemtech/star-node-stack-helper'
+import { AppModule } from './app.module'
 
-const logger = createPinoLogger({
-  serviceName: 'my-service',
-  environment: 'production',
-  logLevel: 'info',
-})
-
-// Create HTTP middleware
-const httpLogger = createHttpLogger(logger)
-```
-
-### Express Integration
-
-```typescript
-import express from 'express'
-
-const app = express()
-
-// Add HTTP logging middleware
-app.use(httpLogger)
-
-app.get('/api/users', (req, res) => {
-  // Logs are automatically captured
-  res.json({ users: [] })
-})
-```
-
-### Structured Logging
-
-```typescript
-// Basic structured logging
-logger.info('User action completed', {
-  userId: '123',
-  action: 'profile_update',
-  timestamp: new Date().toISOString(),
-})
-
-// Using context helpers
-const requestContext = pinoLogContext.request(req, {
-  userId: '456',
-  sessionId: 'sess_789',
-})
-
-logger.info('User performed action', {
-  ...requestContext,
-  action: 'file_upload',
-  fileSize: 1024,
-  fileName: 'document.pdf',
-})
-
-// Performance logging
-const startTime = Date.now()
-// ... perform operation
-const duration = Date.now() - startTime
-
-const performanceContext = pinoLogContext.performance('file_upload', duration, {
-  fileSize: 1024,
-  fileName: 'document.pdf',
-})
-
-logger.info('Operation completed', {
-  ...requestContext,
-  ...performanceContext,
-  success: true,
-})
-
-// Proxy/API Gateway logging
-const proxyContext = pinoLogContext.proxy(
-  'https://api.example.com',
-  'user-service',
-  {
-    method: 'GET',
-    endpoint: '/users/123',
-    responseTime: 150,
-  }
-)
-
-logger.info('API Gateway request', proxyContext)
-
-// Error logging
-try {
-  // ... risky operation
-} catch (error) {
-  const errorContext = pinoLogContext.error(error, {
-    operation: 'file_upload',
-    retryable: true,
+async function bootstrap() {
+  const rootLogger = createPinoLogger({
+    correlationMode: 'datadog',   // injeta dd.trace_id / dd.span_id em cada log
+    // serviceName: 'my-api'     // opcional — padrão: DD_SERVICE ou SERVICE_NAME
+    // logLevel: 'info'          // opcional — padrão: 'info'
   })
 
-  logger.error('Operation failed', {
-    ...requestContext,
-    ...errorContext,
-    severity: 'high',
+  const logger = createNestPinoLoggerService(rootLogger, 'Bootstrap')
+
+  const app = await NestFactory.create(AppModule, { logger })
+
+  await app.listen(3000, () => {
+    logger.log('API running on port 3000', 'Bootstrap')
   })
 }
+bootstrap()
 ```
 
-### Custom Configuration
+Todos os logs internos do NestJS (bootstrap, rotas, módulos) passam pelo Pino e saem como JSON estruturado.
+
+### Interceptor de request/response com Pino
+
+Para registrar requests/responses com o mesmo formato JSON (incluindo `dd.trace_id`):
 
 ```typescript
-const logger = createPinoLogger({
-  serviceName: 'my-service',
-  environment: 'production',
-  logLevel: 'debug',
-  customFormatters: {
-    level: (label) => ({ level: label.toUpperCase() }),
-    log: (object) => ({ ...object, custom: true }),
-  },
-  customSerializers: {
-    req: (req) => ({ method: req.method, url: req.url }),
-    res: (res) => ({ statusCode: res.statusCode }),
-    err: (err) => ({ message: err.message, stack: err.stack }),
-  },
-  redactPaths: ['password', 'token', 'secret'],
-})
-```
-
-## 💬 Slack Notifications
-
-The library provides comprehensive Slack integration with support for both the official Slack API and webhooks, including formatted messages, interactive buttons, and attachments. **Now with enhanced block validation and error handling to prevent "invalid_blocks" errors.**
-
-### Basic Setup
-
-#### Using Slack API (Recommended)
-
-```typescript
-import {
-  sendSlackMessage,
-  SlackNotifier,
-  createSectionBlock,
-  createButtonElement,
-  createActionBlock,
-} from '@starbemtech/star-node-stack-helper'
-
-// Simple message
-const response = await sendSlackMessage(
-  {
-    channel: '#general',
-    text: 'Hello! This is a test notification.',
-    username: 'My Bot',
-    icon_emoji: ':robot_face:',
-  },
-  {
-    config: {
-      token: 'xoxb-your-bot-token-here',
-      defaultChannel: '#general',
-      botName: 'My Bot',
-    },
-    failSilently: true,
-  }
-)
-
-console.log('Message sent:', response.ok)
-```
-
-#### Using Slack Webhook
-
-```typescript
-import { sendSlackWebhook } from '@starbemtech/star-node-stack-helper'
-
-const response = await sendSlackWebhook(
-  {
-    text: 'Hello via webhook!',
-    channel: '#general',
-    username: 'Webhook Bot',
-  },
-  {
-    webhookUrl: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL',
-    defaultChannel: '#general',
-    botName: 'Webhook Bot',
-  }
-)
-```
-
-### Using SlackNotifier Class
-
-The `SlackNotifier` class provides a convenient way to manage Slack notifications:
-
-```typescript
-import { SlackNotifier } from '@starbemtech/star-node-stack-helper'
-
-const notifier = new SlackNotifier(
-  {
-    token: 'xoxb-your-bot-token-here',
-    defaultChannel: '#notifications',
-    botName: 'System Notifications',
-  },
-  {
-    failSilently: true,
-    retryConfig: {
-      maxAttempts: 5,
-      delayMs: 2000,
-    },
-  }
-)
-
-// Send different types of messages
-await notifier.sendMessage('Simple message')
-await notifier.sendSuccess('Operation completed successfully!')
-await notifier.sendWarning('Attention: Low resources detected')
-await notifier.sendError('Critical error: Database connection failed')
-```
-
-### Formatted Messages with Blocks
-
-```typescript
-import {
-  sendSlackMessage,
-  createSectionBlock,
-  createDividerBlock,
-  createButtonElement,
-  createActionBlock,
-} from '@starbemtech/star-node-stack-helper'
-
-const blocks = [
-  createSectionBlock('*🚀 New Deploy Completed!*', { type: 'mrkdwn' }),
-  createDividerBlock(), // Use divider instead of empty section blocks
-  createSectionBlock('Deployment Details', {
-    fields: [
-      { type: 'mrkdwn', text: '*Environment:*' },
-      { type: 'mrkdwn', text: 'Production' },
-      { type: 'mrkdwn', text: '*Version:*' },
-      { type: 'mrkdwn', text: 'v1.2.3' },
-      { type: 'mrkdwn', text: '*Status:*' },
-      { type: 'mrkdwn', text: '✅ Success' },
-    ],
-  }),
-  createActionBlock([
-    createButtonElement('View Logs', 'view_logs', {
-      style: 'primary',
-      action_id: 'view_logs_btn',
-    }),
-    createButtonElement('Rollback', 'rollback', {
-      style: 'danger',
-      action_id: 'rollback_btn',
-    }),
-  ]),
-]
-
-const response = await sendSlackMessage(
-  {
-    channel: '#deployments',
-    text: 'New deploy completed successfully!',
-    blocks,
-  },
-  {
-    config: {
-      token: 'xoxb-your-bot-token-here',
-    },
-  }
-)
-```
-
-### Enhanced Block Validation
-
-The library now includes automatic block validation and sanitization to prevent "invalid_blocks" errors:
-
-```typescript
-import {
-  SlackNotifier,
-  createSectionBlock,
-} from '@starbemtech/star-node-stack-helper'
-
-const notifier = new SlackNotifier({
-  token: 'xoxb-your-bot-token-here',
-  defaultChannel: '#notifications',
-})
-
-// The sendFormattedMessage method now automatically:
-// 1. Validates block structure
-// 2. Sanitizes text content (removes control characters, escapes special chars)
-// 3. Truncates text that exceeds Slack's 3000 character limit
-// 4. Filters out invalid blocks
-// 5. Falls back to simple text message if all blocks are invalid
-
-await notifier.sendFormattedMessage([
-  createSectionBlock('*System Status*', { type: 'mrkdwn' }),
-  createSectionBlock('✅ All systems operational'), // Text is automatically sanitized
-  createSectionBlock(''), // Empty blocks are automatically handled
-])
-```
-
-#### Block Validation Features
-
-- **Text Sanitization**: Automatically removes control characters and escapes special characters for mrkdwn
-- **Length Validation**: Truncates text that exceeds Slack's 3000 character limit
-- **Structure Validation**: Ensures blocks have required properties and valid types
-- **Empty Block Handling**: Replaces empty section blocks with proper dividers
-- **Error Recovery**: Falls back to simple text messages if all blocks are invalid
-- **Detailed Logging**: Warns about filtered blocks for debugging
-
-### Attachments
-
-```typescript
-import { createSlackAttachment } from '@starbemtech/star-node-stack-helper'
-
-const attachment = createSlackAttachment({
-  color: 'danger',
-  title: '🚨 System Alert',
-  text: 'The system detected a critical issue that requires immediate attention.',
-  fields: [
-    { title: 'Service', value: 'API Gateway', short: true },
-    { title: 'Error', value: 'Connection timeout', short: true },
-    { title: 'Timestamp', value: new Date().toISOString(), short: false },
-  ],
-  ts: Math.floor(Date.now() / 1000),
-})
-
-const response = await sendSlackMessage(
-  {
-    channel: '#alerts',
-    text: 'Critical system alert',
-    attachments: [attachment],
-  },
-  {
-    config: {
-      token: 'xoxb-your-bot-token-here',
-    },
-  }
-)
-```
-
-### Error Handling and Retry
-
-```typescript
-import { sendSlackMessage } from '@starbemtech/star-node-stack-helper'
-
-try {
-  const response = await sendSlackMessage(
-    {
-      channel: '#errors',
-      text: 'This message will be retried multiple times on failure',
-    },
-    {
-      config: {
-        token: 'xoxb-your-bot-token-here',
-      },
-      retryConfig: {
-        maxAttempts: 3,
-        delayMs: 1000,
-      },
-      failSilently: false, // Will throw error if it fails
-    }
-  )
-
-  console.log('Message sent successfully:', response)
-} catch (error) {
-  console.error('Failed to send message after all attempts:', error)
-}
-```
-
-### Troubleshooting Common Issues
-
-#### "invalid_blocks" Error
-
-If you encounter the "invalid_blocks" error, the library now automatically handles most common causes:
-
-```typescript
-// ❌ Problematic code (now automatically fixed)
-const blocks = [
-  createSectionBlock(''), // Empty blocks are now handled
-  createSectionBlock('Very long text...'), // Text is automatically truncated
-  createSectionBlock('Text with special chars <>&'), // Characters are escaped
-]
-
-// ✅ Recommended approach
-const blocks = [
-  createSectionBlock('*Title*', { type: 'mrkdwn' }),
-  createDividerBlock(), // Use dividers for separation
-  createSectionBlock('Content with proper formatting'),
-]
-```
-
-#### Channel Membership Check
-
-The library now includes an optional channel membership check to verify if the bot is in the channel before sending messages:
-
-```typescript
-// Enable channel membership check (disabled by default)
-await sendSlackMessage(
-  {
-    channel: '#general',
-    text: 'Hello!',
-  },
-  {
-    config: {
-      token: 'xoxb-your-token',
-    },
-    checkChannelMembership: true, // Enable channel check
-    failSilently: true,
-  }
-)
-
-// Disable channel membership check (default behavior)
-await sendSlackMessage(
-  {
-    channel: '#general',
-    text: 'Hello!',
-  },
-  {
-    config: {
-      token: 'xoxb-your-token',
-    },
-    checkChannelMembership: false, // Disable channel check (default)
-  }
-)
-```
-
-**Note:** The `SlackNotifier` class has channel membership check disabled by default for better performance and to avoid unnecessary API calls.
-
-#### Best Practices
-
-1. **Use `createDividerBlock()` instead of empty section blocks**
-2. **Keep text content under 3000 characters** (automatically handled)
-3. **Use proper mrkdwn formatting** for rich text
-4. **Handle errors gracefully** with `failSilently: true`
-5. **Disable channel membership check** if you're sure the bot is in the channel
-
-```typescript
-const notifier = new SlackNotifier(
-  {
-    token: 'xoxb-your-token',
-    defaultChannel: '#notifications',
-  },
-  {
-    failSilently: true, // Prevents crashes on Slack API errors
-    retryConfig: {
-      maxAttempts: 3,
-      delayMs: 1000,
-    },
-  }
-)
-```
-
-### Configuration
-
-#### Slack API Setup
-
-1. Go to [api.slack.com/apps](https://api.slack.com/apps)
-2. Create a new app or select an existing one
-3. Navigate to "OAuth & Permissions"
-4. Add the following scopes:
-   - `chat:write` - Send messages
-   - `chat:write.public` - Send messages to public channels
-   - `chat:write.customize` - Customize bot name and icon
-5. Install the app to your workspace
-6. Copy the "Bot User OAuth Token" (starts with `xoxb-`)
-
-#### Webhook Setup
-
-1. Go to [api.slack.com/apps](https://api.slack.com/apps)
-2. Create a new app or select an existing one
-3. Navigate to "Incoming Webhooks"
-4. Activate "Activate Incoming Webhooks"
-5. Click "Add New Webhook to Workspace"
-6. Select the channel and copy the webhook URL
-
-## 🚀 NestJS Compatibility
-
-A biblioteca é totalmente compatível com NestJS, oferecendo decorators, interceptors, guards e exception filters para integração nativa com o framework.
-
-### Instalação para NestJS
-
-```bash
-npm install @starbemtech/star-node-stack-helper @nestjs/common @nestjs/core rxjs
-# ou
-pnpm add @starbemtech/star-node-stack-helper @nestjs/common @nestjs/core rxjs
-```
-
-### Configuração Básica
-
-```typescript
+// src/app.module.ts
 import { Module } from '@nestjs/common'
-import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core'
+import { APP_INTERCEPTOR, APP_FILTER, Reflector } from '@nestjs/core'
 import {
-  ElasticLogger,
-  LoggerConfig,
-  TransactionLogInterceptor,
+  createPinoLogger,
+  createPinoLogWriter,
+  LogInterceptor,
   LogExceptionFilter,
 } from '@starbemtech/star-node-stack-helper'
 
-const elasticConfig: LoggerConfig = {
-  node: 'https://your-opensearch-endpoint.com',
-  service: 'my-service',
-  environment: 'development',
-  index: 'transaction-logs',
-  region: 'us-east-1',
-  authType: 'aws',
-}
-
-const elasticLogger = new ElasticLogger(elasticConfig)
+const rootLogger = createPinoLogger({ correlationMode: 'datadog' })
 
 @Module({
   providers: [
     {
       provide: APP_INTERCEPTOR,
-      useValue: new TransactionLogInterceptor({
-        microservice: 'my-service',
-        operation: 'api-request',
-        elasticLogger,
+      useFactory: (reflector: Reflector) =>
+        new LogInterceptor(reflector, {
+          logWriter: createPinoLogWriter(rootLogger, 'HTTP'),
+          skipResponseLogging: true,  // evita duplicação com acesso HTTP
+        }),
+      inject: [Reflector],
+    },
+    {
+      provide: APP_FILTER,
+      useValue: new LogExceptionFilter({
+        logWriter: createPinoLogWriter(rootLogger, 'ExceptionFilter'),
       }),
     },
-    {
-      provide: APP_FILTER,
-      useClass: LogExceptionFilter,
-    },
   ],
 })
 export class AppModule {}
 ```
 
-### Decorators de Logging
+> Quando `logWriter` é omitido, o `LogInterceptor` e o `LogExceptionFilter` continuam funcionando com o `Logger` nativo do NestJS (retrocompatível).
 
-#### @Log - Logging Básico
+### Usar o logger diretamente em services e controllers
 
 ```typescript
-import { Controller, Get, Post, Body } from '@nestjs/common'
+// src/users/users.service.ts
+import { Injectable } from '@nestjs/common'
 import {
-  Log,
-  LogPerformance,
-  LogError,
-  LogCritical,
-} from '@starbemtech/star-node-stack-helper'
-
-@Controller('users')
-export class UsersController {
-  @Get()
-  @Log('info', 'Fetching all users')
-  async getUsers() {
-    return [{ id: 1, name: 'João' }]
-  }
-
-  @Post()
-  @LogPerformance('user-creation')
-  async createUser(@Body() userData: any) {
-    // Operação que será medida automaticamente
-    return { id: 1, ...userData }
-  }
-
-  @Get('error')
-  @LogError('Failed to fetch user')
-  async getUserWithError() {
-    throw new Error('User not found')
-  }
-
-  @Get('critical')
-  @LogCritical('Critical system failure')
-  async criticalOperation() {
-    // Operação crítica que será logada com nível crítico
-    return { status: 'critical' }
-  }
-}
-```
-
-#### @TransactionLog - Logging de Transações
-
-```typescript
-import { Controller, Post, Body } from '@nestjs/common'
-import { TransactionLog } from '@starbemtech/star-node-stack-helper'
-
-@Controller('transactions')
-export class TransactionController {
-  @Post('payment')
-  @TransactionLog({
-    microservice: 'payment-service',
-    operation: 'process-payment',
-    elasticLogger,
-  })
-  async processPayment(@Body() paymentData: any) {
-    // Transação será automaticamente logada
-    return { transactionId: 'tx_123', status: 'success' }
-  }
-}
-```
-
-### Interceptors
-
-#### TransactionLogInterceptor - Interceptor Manual
-
-```typescript
-import { Controller, Get, UseInterceptors } from '@nestjs/common'
-import { TransactionLogInterceptor } from '@starbemtech/star-node-stack-helper'
-
-@Controller('api')
-@UseInterceptors(
-  new TransactionLogInterceptor({
-    microservice: 'my-service',
-    operation: 'api-request',
-    elasticLogger,
-  })
-)
-export class ApiController {
-  @Get('users')
-  async getUsers() {
-    return [{ id: 1, name: 'João' }]
-  }
-}
-```
-
-#### AutoTransactionLogInterceptor - Interceptor Automático
-
-```typescript
-import { Controller, Get, UseInterceptors } from '@nestjs/common'
-import {
-  AutoTransactionLogInterceptor,
-  TransactionLog,
-} from '@starbemtech/star-node-stack-helper'
-
-@Controller('api')
-@UseInterceptors(
-  new AutoTransactionLogInterceptor({
-    elasticLogger,
-    defaultMicroservice: 'my-service',
-  })
-)
-export class ApiController {
-  @Get('users')
-  @TransactionLog({
-    operation: 'get-users',
-    microservice: 'user-service',
-  })
-  async getUsers() {
-    return [{ id: 1, name: 'João' }]
-  }
-}
-```
-
-### Guards
-
-#### LogGuard - Guard de Autenticação com Logging
-
-```typescript
-import { Controller, Get, UseGuards } from '@nestjs/common'
-import { LogGuard } from '@starbemtech/star-node-stack-helper'
-
-@Controller('protected')
-@UseGuards(
-  new LogGuard({
-    elasticLogger,
-    logLevel: 'info',
-  })
-)
-export class ProtectedController {
-  @Get('data')
-  async getProtectedData() {
-    return { data: 'sensitive information' }
-  }
-}
-```
-
-### Exception Filters
-
-#### LogExceptionFilter - Filtro de Exceções
-
-```typescript
-import { Module } from '@nestjs/common'
-import { APP_FILTER } from '@nestjs/core'
-import { LogExceptionFilter } from '@starbemtech/star-node-stack-helper'
-
-@Module({
-  providers: [
-    {
-      provide: APP_FILTER,
-      useClass: LogExceptionFilter,
-    },
-  ],
-})
-export class AppModule {}
-```
-
-### Exemplo Completo NestJS
-
-```typescript
-import {
-  Module,
-  Controller,
-  Get,
-  Post,
-  Body,
-  UseInterceptors,
-} from '@nestjs/common'
-import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core'
-import {
-  ElasticLogger,
-  LoggerConfig,
-  TransactionLogInterceptor,
-  LogExceptionFilter,
-  TransactionLog,
-  Log,
-} from '@starbemtech/star-node-stack-helper'
-
-// Configuração
-const elasticConfig: LoggerConfig = {
-  node: 'https://your-opensearch-endpoint.com',
-  service: 'my-nestjs-app',
-  environment: 'production',
-  index: 'nestjs-logs',
-  region: 'us-east-1',
-  authType: 'aws',
-}
-
-const elasticLogger = new ElasticLogger(elasticConfig)
-
-// Controller
-@Controller('api')
-@UseInterceptors(
-  new TransactionLogInterceptor({
-    microservice: 'api-service',
-    operation: 'api-request',
-    elasticLogger,
-  })
-)
-export class ApiController {
-  @Get('users')
-  @Log('info', 'Fetching users list')
-  async getUsers() {
-    return [
-      { id: 1, name: 'João' },
-      { id: 2, name: 'Maria' },
-    ]
-  }
-
-  @Post('users')
-  @TransactionLog({
-    microservice: 'user-service',
-    operation: 'create-user',
-    elasticLogger,
-  })
-  async createUser(@Body() userData: any) {
-    return {
-      id: Math.floor(Math.random() * 1000),
-      ...userData,
-      createdAt: new Date().toISOString(),
-    }
-  }
-}
-
-// Módulo Principal
-@Module({
-  controllers: [ApiController],
-  providers: [
-    {
-      provide: APP_INTERCEPTOR,
-      useValue: new TransactionLogInterceptor({
-        microservice: 'my-nestjs-app',
-        operation: 'global-request',
-        elasticLogger,
-      }),
-    },
-    {
-      provide: APP_FILTER,
-      useClass: LogExceptionFilter,
-    },
-  ],
-})
-export class AppModule {}
-```
-
-### Configuração Avançada
-
-#### Interceptor com Contexto Customizado
-
-```typescript
-import { TransactionLogInterceptor } from '@starbemtech/star-node-stack-helper'
-
-const customInterceptor = new TransactionLogInterceptor({
-  microservice: 'my-service',
-  operation: 'api-request',
-  elasticLogger,
-  customContext: (context) => ({
-    userId: context.switchToHttp().getRequest().user?.id,
-    sessionId: context.switchToHttp().getRequest().sessionId,
-    customField: 'custom-value',
-  }),
-})
-```
-
-#### Exception Filter com Configuração Customizada
-
-```typescript
-import { LogExceptionFilter } from '@starbemtech/star-node-stack-helper'
-
-const customExceptionFilter = new LogExceptionFilter({
-  elasticLogger,
-  logLevel: 'error',
-  customContext: (host) => ({
-    requestId: host.switchToHttp().getRequest().id,
-    userId: host.switchToHttp().getRequest().user?.id,
-  }),
-})
-```
-
-## 🛠 Express Middleware
-
-### Performance Logger Middleware
-
-```typescript
-import { performanceLoggerMiddleware } from '@starbemtech/star-node-stack-helper'
-
-// Apply to specific routes
-app.get(
-  '/api/slow-operation',
-  performanceLoggerMiddleware('my-service', 'slow-operation', 'production'),
-  (req, res) => {
-    // Middleware automatically measures and logs performance
-    setTimeout(() => {
-      res.json({ message: 'Operation completed' })
-    }, 1000)
-  }
-)
-
-// Apply to multiple routes
-const performanceMiddleware = performanceLoggerMiddleware(
-  'my-service',
-  'api-call',
-  'production'
-)
-
-app.use('/api', performanceMiddleware)
-```
-
-### Transaction Logger Middleware
-
-```typescript
-import {
-  transactionLoggerMiddleware,
-  ElasticLogger,
-} from '@starbemtech/star-node-stack-helper'
-
-const elasticLogger = new ElasticLogger(loggerConfig)
-
-// Apply to specific routes
-app.post(
-  '/api/users',
-  transactionLoggerMiddleware('user-service', 'create-user', elasticLogger),
-  (req, res) => {
-    // Middleware automatically captures (agora via evento 'finish'):
-    // - Request metadata (method, path, baseUrl, route, host, ip/x-forwarded-for, userAgent, httpVersion)
-    // - Context enriquecido com params/query/body sanitizados (campos sensíveis mascarados) e com limite de tamanho + hash
-    // - Headers relevantes (x-user-id, x-platform, authorization [mascarado], content-type, etc.)
-    // - Status/timing e responseSize (quando disponível via content-length)
-    // - Geração/propagação de transactionId
-
-    const user = createUser(req.body)
-    res.status(201).json({
-      user,
-      transactionId: req.transactionId,
-    })
-  }
-)
-
-// Apply globally with different operations
-app.use('/api', (req, res, next) => {
-  const operation = `${req.method.toLowerCase()}-${req.path.split('/').pop()}`
-  return transactionLoggerMiddleware('api-service', operation, elasticLogger)(
-    req,
-    res,
-    next
-  )
-})
-```
-
-#### Notas
-
-- O middleware usa `res.once('finish')` para garantir logging mesmo quando a resposta é enviada por `res.end` ou streams.
-- O objeto `context` inclui `params`, `query` e `body` sanitizados de forma recursiva (campos sensíveis como `password`, `token`, `secret`, etc. são mascarados) e serialização limitada para evitar logs gigantes.
-- Para propagar o identificador para clientes, combine com o middleware `addTransactionId`, que adiciona o header `X-Transaction-ID` à resposta.
-
-### Transaction ID Middleware
-
-```typescript
-import { addTransactionId } from '@starbemtech/star-node-stack-helper'
-
-// Add transaction ID to all requests
-app.use(addTransactionId)
-
-app.get('/api/data', (req, res) => {
-  // req.transactionId is now available
-  res.json({
-    data: 'some data',
-    transactionId: req.transactionId,
-  })
-})
-```
-
-## 📝 TypeScript Types
-
-### Secret Configuration
-
-```typescript
-import {
-  SecretConfig,
-  RetryConfig,
-  LoadSecretsOptions,
-} from '@starbemtech/star-node-stack-helper'
-
-interface SecretConfig {
-  region: string
-  secretName: string | string[]
-  retry?: RetryConfig
-  credentials?: {
-    accessKeyId: string
-    secretAccessKey: string
-  }
-}
-
-interface RetryConfig {
-  maxRetries: number
-  retryDelay: number
-  exponentialBackoff: boolean
-}
-```
-
-### Logger Configuration
-
-```typescript
-import {
-  LoggerConfig,
-  LogLevel,
-  LogTransaction,
-} from '@starbemtech/star-node-stack-helper'
-
-interface LoggerConfig {
-  node: string
-  service: string
-  environment: string
-  index: string
-  region: string
-  authType: 'aws' | 'basic'
-  username?: string
-  password?: string
-}
-
-interface LogTransaction {
-  name: string
-  microservice: string
-  operation: string
-  status: 'success' | 'fail'
-  duration: number
-  context?: Record<string, unknown>
-  requestMeta?: {
-    method: string
-    path: string
-    ip?: string
-    userAgent?: string
-  }
-}
-```
-
-### Pino Logger Configuration
-
-```typescript
-import { PinoLoggerConfig } from '@starbemtech/star-node-stack-helper'
-
-interface PinoLoggerConfig {
-  serviceName: string
-  environment: string
-  logLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
-  customFormatters?: {
-    level?: (label: string) => unknown
-    log?: (object: unknown) => unknown
-  }
-  customSerializers?: {
-    req?: (req: unknown) => unknown
-    res?: (res: unknown) => unknown
-    err?: (err: unknown) => unknown
-  }
-  redactPaths?: string[]
-}
-```
-
-### Slack Configuration
-
-```typescript
-import {
-  SlackConfig,
-  SlackMessage,
-  SlackResponse,
-  SlackNotificationOptions,
-  SlackWebhookConfig,
-  SlackWebhookMessage,
-  SlackBlock,
-  SlackAttachment,
-} from '@starbemtech/star-node-stack-helper'
-
-interface SlackConfig {
-  token: string
-  defaultChannel?: string
-  botName?: string
-  baseUrl?: string
-}
-
-interface SlackMessage {
-  channel: string
-  text: string
-  blocks?: SlackBlock[]
-  attachments?: SlackAttachment[]
-  username?: string
-  icon_emoji?: string
-  icon_url?: string
-  thread_ts?: string
-  replace_original?: boolean
-  delete_original?: boolean
-}
-
-interface SlackResponse {
-  ok: boolean
-  channel?: string
-  ts?: string
-  message?: {
-    text: string
-    user: string
-    ts: string
-    type: string
-    subtype?: string
-  }
-  error?: string
-  details?: string
-}
-```
-
-## 🎯 Examples
-
-### Complete Express Application
-
-```typescript
-import express from 'express'
-import {
-  ElasticLogger,
-  LoggerConfig,
-  loadSecrets,
-  transactionLoggerMiddleware,
   createPinoLogger,
-  createHttpLogger,
-  performanceLoggerMiddleware,
-  pinoLogContext,
+  createPinoLogWriter,
+  LogWriter,
 } from '@starbemtech/star-node-stack-helper'
 
-// Load secrets on startup
-await loadSecrets({
-  region: 'us-east-1',
-  secretName: ['prod/database/credentials', 'prod/api/keys'],
-})
+// Opção A: injetar via DI (recomendado)
+@Injectable()
+export class UsersService {
+  constructor(
+    @Inject('LOG_WRITER') private readonly log: LogWriter,
+  ) {}
 
-// Configure loggers
-const elasticConfig: LoggerConfig = {
-  node: process.env.OPENSEARCH_ENDPOINT!,
-  service: 'my-api',
-  environment: 'production',
-  index: 'api-logs',
-  region: 'us-east-1',
-  authType: 'aws',
-}
+  async createUser(data: CreateUserDto) {
+    this.log.info('Creating user', { email: data.email })
 
-const elasticLogger = new ElasticLogger(elasticConfig)
-const pinoLogger = createPinoLogger({
-  serviceName: 'my-api',
-  environment: 'production',
-  logLevel: 'info',
-})
-
-const app = express()
-
-// Global middleware
-app.use(createHttpLogger(pinoLogger))
-app.use(express.json())
-
-// Performance monitoring for all API routes
-app.use(
-  '/api',
-  performanceLoggerMiddleware('my-api', 'api-request', 'production')
-)
-
-// Transaction logging for specific operations
-app.post(
-  '/api/users',
-  transactionLoggerMiddleware('user-service', 'create-user', elasticLogger),
-  async (req, res) => {
     try {
-      const user = await createUser(req.body)
-
-      pinoLogger.info('User created successfully', {
-        ...pinoLogContext.request(req, { userId: user.id }),
-        action: 'user_creation',
-        userRole: user.role,
-      })
-
-      res.status(201).json({
-        user,
-        transactionId: req.transactionId,
-      })
+      const user = await this.db.create(data)
+      this.log.info('User created', { userId: user.id })
+      return user
     } catch (error) {
-      pinoLogger.error('Failed to create user', {
-        ...pinoLogContext.request(req),
-        ...pinoLogContext.error(error),
-        action: 'user_creation',
+      this.log.error('Failed to create user', {
+        email: data.email,
+        error: error.message,
       })
-
-      res.status(500).json({
-        error: 'Internal server error',
-        transactionId: req.transactionId,
-      })
+      throw error
     }
   }
-)
-
-app.listen(3000, () => {
-  pinoLogger.info('Server started', {
-    port: 3000,
-    environment: 'production',
-  })
-})
+}
 ```
 
-### AWS Lambda Function
+Provendo o `LogWriter` via DI no `AppModule`:
 
 ```typescript
-import { APIGatewayProxyHandler } from 'aws-lambda'
+const rootLogger = createPinoLogger({ correlationMode: 'datadog' })
+
+@Module({
+  providers: [
+    {
+      provide: 'LOG_WRITER',
+      useValue: createPinoLogWriter(rootLogger),
+    },
+  ],
+})
+export class AppModule {}
+```
+
+---
+
+## Express
+
+```typescript
+// src/server.ts
+import './tracing'   // ← PRIMEIRO
+
+import express from 'express'
 import {
-  ElasticLogger,
-  loadSecrets,
+  createPinoLogger,
+  createHttpLogger,
   pinoLogContext,
 } from '@starbemtech/star-node-stack-helper'
 
-// Load secrets once (Lambda container reuse)
-let secretsLoaded = false
-let logger: ElasticLogger
+const app = express()
 
-export const handler: APIGatewayProxyHandler = async (event) => {
-  // Load secrets only once per container
-  if (!secretsLoaded) {
-    await loadSecrets({
-      region: process.env.AWS_REGION!,
-      secretName: ['prod/api/keys'],
-    })
+const logger = createPinoLogger({
+  correlationMode: 'datadog',
+})
 
-    logger = new ElasticLogger({
-      node: process.env.OPENSEARCH_ENDPOINT!,
-      service: 'lambda-api',
-      environment: 'production',
-      index: 'lambda-logs',
-      region: process.env.AWS_REGION!,
-      authType: 'aws',
-    })
+// Middleware de HTTP access log
+// Silencia automaticamente: /healthz, /health, /ready, /live, /ping, /metrics
+app.use(createHttpLogger(logger))
 
-    secretsLoaded = true
-  }
+// Usar em handlers
+app.get('/users', async (req, res) => {
+  logger.info({ userId: req.user?.id }, 'Fetching users')
 
   try {
-    // Your business logic here
-    const result = await processRequest(event)
-
-    // Log successful operation
-    await logger.logTransaction({
-      name: 'api-request',
-      microservice: 'lambda-api',
-      operation: 'process-request',
-      status: 'success',
-      duration: Date.now() - event.requestContext.requestTime,
-      context: {
-        path: event.path,
-        method: event.httpMethod,
-        userId: event.requestContext.authorizer?.userId,
-      },
-      requestMeta: {
-        method: event.httpMethod,
-        path: event.path,
-        ip: event.requestContext.identity.sourceIp,
-        userAgent: event.headers['User-Agent'],
-      },
-    })
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify(result),
-    }
+    const users = await getUsers()
+    logger.info({ count: users.length }, 'Users fetched')
+    res.json(users)
   } catch (error) {
-    // Log error
-    await logger.log('error', 'Lambda function error', {
-      ...pinoLogContext.error(error),
-      path: event.path,
-      method: event.httpMethod,
-    })
-
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Internal server error' }),
-    }
+    logger.error(
+      pinoLogContext.error(error, { operation: 'getUsers' }),
+      'Failed to fetch users',
+    )
+    res.status(500).json({ error: 'Internal server error' })
   }
-}
-```
+})
 
-## 📖 API Reference
-
-### AWS Secrets Manager
-
-#### `loadSecrets(config: SecretConfig | LoadSecretsOptions): Promise<void>`
-
-Loads secrets from AWS Secrets Manager and sets them as environment variables.
-
-**Parameters:**
-
-- `config`: Configuration object with region, secret names, and optional retry settings
-
-**Example:**
-
-```typescript
-await loadSecrets({
-  region: 'us-east-1',
-  secretName: ['prod/database/credentials'],
+app.listen(3000, () => {
+  logger.info('Server started on port 3000')
 })
 ```
 
-#### `testSavedSecrets(): void`
-
-Tests if secrets were loaded correctly by logging environment variables.
-
-#### `isRunningOnAWS(): boolean`
-
-Returns `true` if the application is running on AWS (Lambda, EC2, etc.).
-
-#### `getAWSRegion(): string | undefined`
-
-Returns the current AWS region or `undefined` if not running on AWS.
-
-### Elasticsearch/OpenSearch Logger
-
-#### `new ElasticLogger(config: LoggerConfig)`
-
-Creates a new ElasticLogger instance.
-
-#### `logger.log(level: LogLevel, message: string, metadata?: Record<string, unknown>): Promise<void>`
-
-Logs a message with the specified level and metadata.
-
-#### `logger.logTransaction(transaction: LogTransaction): Promise<void>`
-
-Logs a transaction with detailed metadata.
-
-#### `logger.getSystemLogs(query: string | string[]): Promise<any[]>`
-
-Searches system logs with the given query.
-
-#### `logger.getLogsTransactions(query: string | string[]): Promise<any[]>`
-
-Searches transaction logs with the given query.
-
-#### `logger.healthCheck(): Promise<boolean>`
-
-Checks the health of the OpenSearch cluster.
-
-#### `logger.testConnection(): Promise<void>`
-
-Tests the connection to OpenSearch.
-
-#### `logger.flush(): Promise<void>`
-
-Flushes all indices.
-
-#### `logger.recreateIndex(): Promise<void>`
-
-Recreates the index (useful for schema changes).
-
-### Slack Notifications
-
-#### `sendSlackMessage(message: SlackMessage, options: SlackNotificationOptions): Promise<SlackResponse>`
-
-Sends a message to Slack using the official API.
-
-**Parameters:**
-
-- `message`: The message to send with channel, text, and optional formatting
-- `options`: Configuration including token, retry settings, error handling, and channel membership check
-
-**Options:**
-
-- `config`: Slack configuration with token and default settings
-- `retryConfig`: Retry configuration for failed requests
-- `failSilently`: Whether to throw errors or return error responses
-- `checkChannelMembership`: Whether to verify bot is in channel before sending (default: false)
-
-**Example:**
+### Silenciar rotas customizadas
 
 ```typescript
-const response = await sendSlackMessage(
-  {
-    channel: '#general',
-    text: 'Hello from my app!',
-    username: 'My Bot',
-  },
-  {
-    config: {
-      token: 'xoxb-your-bot-token',
-      defaultChannel: '#general',
-    },
-    failSilently: true,
-  }
+// Adicionar rotas ao silêncio (além das built-in)
+app.use(
+  createHttpLogger(logger, {
+    customSilentRoutes: ['/internal/ready', '/probe'],
+  }),
 )
 ```
 
-#### `sendSlackWebhook(message: SlackWebhookMessage, config: SlackWebhookConfig, options?: object): Promise<SlackResponse>`
+O matching é por **pathname**, então `/connect/healthz` também é silenciado quando `/healthz` está na lista.
 
-Sends a message to Slack using a webhook.
+---
 
-**Parameters:**
+## Fastify
 
-- `message`: The message to send
-- `config`: Webhook configuration with URL and default settings
-- `options`: Optional retry and error handling settings
+```typescript
+// src/server.ts
+import './tracing'   // ← PRIMEIRO
 
-#### `createSectionBlock(text: string, options?: object): SlackBlock`
+import Fastify from 'fastify'
+import {
+  createPinoLogger,
+  buildFastifyLoggerOptions,
+} from '@starbemtech/star-node-stack-helper'
 
-Creates a section block for formatted messages. **Now includes automatic text sanitization and validation.**
+const logger = createPinoLogger({
+  correlationMode: 'datadog',
+})
 
-#### `createDividerBlock(): SlackBlock`
+// Fastify usa o logger Pino diretamente — cada request recebe um child logger
+const app = Fastify(buildFastifyLoggerOptions(logger))
 
-Creates a divider block for visual separation. **Recommended for replacing empty section blocks.**
+app.get('/users', async (request, reply) => {
+  // request.log é um child do rootLogger, já com req.id bound
+  request.log.info({ userId: '123' }, 'Fetching users')
 
-#### `createButtonElement(text: string, value: string, options?: object): SlackElement`
+  const users = await getUsers()
+  return users
+})
 
-Creates a button element for interactive messages.
+app.listen({ port: 3000 }, () => {
+  logger.info('Server started on port 3000')
+})
+```
 
-#### `createActionBlock(elements: SlackElement[], blockId?: string): SlackBlock`
+### Desabilitar access log automático do Fastify
 
-Creates an actions block with buttons.
+Se preferir controlar o access log via hook:
 
-#### `createSlackAttachment(options: object): SlackAttachment`
+```typescript
+import { buildFastifyLoggerOptionsQuiet } from '@starbemtech/star-node-stack-helper'
 
-Creates an attachment for rich message formatting.
+const app = Fastify(buildFastifyLoggerOptionsQuiet(logger))
 
-#### `new SlackNotifier(config: SlackConfig, options?: object)`
+app.addHook('onResponse', (request, reply, done) => {
+  // acesso custom aqui
+  done()
+})
+```
 
-Creates a SlackNotifier instance for convenient message management.
+---
 
-**Methods:**
+## Logar dentro de services e handlers
 
-- `sendMessage(text: string, channel?: string): Promise<SlackResponse>`
-- `sendSuccess(message: string, channel?: string): Promise<SlackResponse>`
-- `sendError(error: string, channel?: string): Promise<SlackResponse>`
-- `sendWarning(warning: string, channel?: string): Promise<SlackResponse>`
-- `sendFormattedMessage(blocks: SlackBlock[], channel?: string, fallbackText?: string): Promise<SlackResponse>`
+### Pino nativo (Express / Fastify)
 
-### Pino Logger
+A instância retornada por `createPinoLogger` é um `pino.Logger` padrão.
 
-#### `createPinoLogger(config: PinoLoggerConfig): pino.Logger`
+```typescript
+// Logar com dados estruturados
+logger.info({ userId: 'u123', action: 'purchase' }, 'Purchase completed')
+logger.warn({ orderId: 'o456', reason: 'low_stock' }, 'Stock alert')
+logger.error({ error: err.message, stack: err.stack }, 'Payment failed')
+logger.debug({ query: sql, params }, 'DB query executed')
 
-Creates a configured Pino logger instance.
+// Child logger por contexto (herda todos os campos base + dd.*)
+const userLogger = logger.child({ module: 'UsersService' })
+userLogger.info({ userId: '123' }, 'Processing user')
+```
 
-#### `createHttpLogger(logger: pino.Logger, options?: HttpLoggerOptions): HttpLogger`
+### pinoLogContext — helpers de contexto
 
-Creates an Express HTTP logging middleware.
+```typescript
+import { pinoLogContext } from '@starbemtech/star-node-stack-helper'
 
-#### `pinoLogContext.request(req: Request, additionalData?: Record<string, unknown>): Record<string, unknown>`
+// Contexto de request (Express)
+logger.info(pinoLogContext.request(req, { userId: req.user.id }), 'Request received')
 
-Creates request context for logging.
+// Contexto de erro
+logger.error(pinoLogContext.error(error, { operation: 'createUser' }), 'Operation failed')
 
-#### `pinoLogContext.error(error: Error, context?: Record<string, unknown>): Record<string, unknown>`
+// Contexto de performance
+const start = Date.now()
+await doSomething()
+logger.info(pinoLogContext.performance('processPayment', Date.now() - start), 'Done')
 
-Creates error context for logging.
+// Contexto de proxy / chamada externa
+logger.info(pinoLogContext.proxy('https://api.external.com', 'ExternalService'), 'Proxy request')
+```
 
-#### `pinoLogContext.performance(operation: string, duration: number, metadata?: Record<string, unknown>): Record<string, unknown>`
+---
 
-Creates performance context for logging.
+## Modos de correlação com traces
 
-### Express Middleware
+O campo `correlationMode` controla como `dd.trace_id` e `dd.span_id` são injetados:
 
-#### `performanceLoggerMiddleware(service: string, operation: string, environment: string): ExpressMiddleware`
+| Valor | Comportamento | Peer dep necessária |
+|-------|--------------|---------------------|
+| `'datadog'` | Injeta `dd.trace_id` / `dd.span_id` via mixin na chamada do span ativo do `dd-trace` | `dd-trace` |
+| `'otel'` | Injeta `trace_id` / `span_id` do span ativo do `@opentelemetry/api` | `@opentelemetry/api` |
+| `'none'` | Sem injeção pela lib. Depende de `DD_LOGS_INJECTION=true` no `ddTrace.init()` | — |
 
-Creates middleware that measures and logs request performance.
+Quando a peer dep não está instalada ou não há span ativo, a lib retorna `{}` silenciosamente — nenhum erro é lançado.
 
-#### `transactionLoggerMiddleware(service: string, operation: string, elasticLogger: ElasticLogger | null): ExpressMiddleware`
+```typescript
+// Datadog APM
+const logger = createPinoLogger({ correlationMode: 'datadog' })
 
-Creates middleware that logs detailed transaction information.
+// OpenTelemetry
+const logger = createPinoLogger({ correlationMode: 'otel' })
 
-#### `addTransactionId(req: Request, res: Response, next: NextFunction): void`
+// Sem correlação (logs puros)
+const logger = createPinoLogger({ correlationMode: 'none' })
+// ou simplesmente omitir o campo (padrão é 'none')
+const logger = createPinoLogger({})
+```
 
-Adds a transaction ID to the request object.
+---
 
-### NestJS Integration
+## Configuração completa
 
-#### Decorators
+```typescript
+import { createPinoLogger, PinoLoggerConfig } from '@starbemtech/star-node-stack-helper'
 
-##### `@Log(level: LogLevel, message: string)`
+const logger = createPinoLogger({
+  // Identidade do serviço
+  serviceName: 'partner-service',      // padrão: DD_SERVICE → SERVICE_NAME → 'app'
+  environment: 'production',           // padrão: DD_ENV → NODE_ENV → 'development'
 
-Decorator for basic logging with specified level and message.
+  // Nível mínimo de log
+  logLevel: 'info',                    // padrão: 'info'
 
-##### `@LogPerformance(operation: string)`
+  // Correlação de traces
+  correlationMode: 'datadog',          // padrão: 'none'
 
-Decorator for performance logging that automatically measures execution time.
+  // Rotas silenciadas no HTTP access log (além das built-in)
+  customSilentRoutes: ['/probe', '/internal/ready'],
 
-##### `@LogError(message: string)`
+  // Campos extras a redactar em staging/production (além dos padrão)
+  customRedactPaths: ['req.body.cpf', 'req.body.card_number'],
 
-Decorator for error logging with specified message.
+  // Formatters customizados (raramente necessário)
+  customFormatters: {
+    level: (label) => ({ level: label, severity: label.toUpperCase() }),
+  },
 
-##### `@LogCritical(message: string)`
+  // Serializers customizados (raramente necessário)
+  customSerializers: {
+    req: (req: any) => ({ method: req.method, url: req.url }),
+  },
+})
+```
 
-Decorator for critical error logging.
+### Campos sempre redactados em staging/production
 
-##### `@TransactionLog(options: TransactionLogOptions)`
+Os seguintes campos são removidos automaticamente do JSON de saída:
 
-Decorator for transaction logging with custom options.
+- `req.headers.authorization`
+- `req.headers.cookie`
+- `req.body.password`
+- `req.body.token`
+- `req.body.secret`
+- `res.headers["set-cookie"]`
 
-#### Interceptors
+---
 
-##### `TransactionLogInterceptor`
+## Env vars no Kubernetes
 
-Manual transaction logging interceptor for NestJS applications.
+Adicionar nas env vars do deployment (`.k8s/deploy-{env}.tpl.yml`):
 
-**Constructor Options:**
+```yaml
+env:
+  - name: DD_SERVICE
+    value: 'partner-service'       # define service em todos os logs
+  - name: DD_ENV
+    value: 'production'            # define env em todos os logs
+  - name: DD_VERSION
+    value: '${VERSION}'            # define version em todos os logs
+  - name: NODE_ENV
+    value: 'production'            # usado como fallback para environment
+```
 
-- `microservice: string` - Name of the microservice
-- `operation: string` - Operation being performed
-- `elasticLogger: ElasticLogger` - ElasticLogger instance
-- `customContext?: (context: ExecutionContext) => Record<string, unknown>` - Custom context function
+E no ConfigMap (`.k8s/config.tpl.yml`):
 
-##### `AutoTransactionLogInterceptor`
+```yaml
+data:
+  DD_SERVICE: partner-service
+  LOG_LEVEL: info
+```
 
-Automatic transaction logging interceptor that reads metadata from decorators.
+Quando `DD_SERVICE`, `DD_ENV` e `DD_VERSION` estão definidos, o `createPinoLogger` não precisa de nenhuma configuração explícita:
 
-**Constructor Options:**
+```typescript
+// Suficiente quando as env vars estão corretas no pod
+const logger = createPinoLogger({ correlationMode: 'datadog' })
+```
 
-- `elasticLogger: ElasticLogger` - ElasticLogger instance
-- `defaultMicroservice?: string` - Default microservice name
-- `customContext?: (context: ExecutionContext) => Record<string, unknown>` - Custom context function
+---
 
-#### Guards
+## Checklist de validação
 
-##### `LogGuard`
+Após o deploy, verificar no Datadog Log Explorer:
 
-Guard for authentication/authorization with automatic logging.
+- [ ] Logs aparecem em formato JSON (primeiro caractere `{`)
+- [ ] Campo `message` presente (não `msg`)
+- [ ] Campo `service` bate com a tag `tags.datadoghq.com/service` do pod
+- [ ] Campo `env` bate com o ambiente do cluster
+- [ ] Campo `version` presente (requer `DD_VERSION` no pod)
+- [ ] Em requests com span ativo, `dd.trace_id` está presente no JSON
+- [ ] No APM → Trace → aba "Logs", os logs do request aparecem correlacionados
+- [ ] Rotas de health check não aparecem no Log Explorer
+- [ ] Campos sensíveis (`authorization`, `password`, `token`) aparecem como `[REDACTED]`
 
-**Constructor Options:**
+---
 
-- `elasticLogger: ElasticLogger` - ElasticLogger instance
-- `logLevel?: LogLevel` - Log level for guard operations
-- `customContext?: (context: ExecutionContext) => Record<string, unknown>` - Custom context function
+## Troubleshooting
 
-#### Exception Filters
+### `dd.trace_id` não aparece nos logs
 
-##### `LogExceptionFilter`
+1. Confirmar que `import './tracing'` é a **primeira linha** do entrypoint
+2. Confirmar que `correlationMode: 'datadog'` está em `createPinoLogger`
+3. Confirmar que `dd-trace` está instalado: `pnpm ls dd-trace`
+4. O campo só aparece quando há um span ativo — apenas durante requests HTTP instrumentados
 
-Exception filter that automatically logs errors to Elasticsearch/OpenSearch.
+### Logs aparecem como texto, não como JSON
 
-**Constructor Options:**
+- Em `development`/`local`, a lib usa `pino-pretty` automaticamente se disponível
+- Em `staging`/`production`, a saída é sempre JSON compacto
+- Garantir que `NODE_ENV=production` (ou `DD_ENV=production`) está definido no pod
 
-- `elasticLogger: ElasticLogger` - ElasticLogger instance
-- `logLevel?: LogLevel` - Log level for exceptions
-- `customContext?: (host: ArgumentsHost) => Record<string, unknown>` - Custom context function
+### Rota `/healthz` ainda aparece nos logs
 
-## 🤝 Contributing
+Verificar se a app usa prefixo global (ex.: `/connect/healthz`). O match é por `endsWith`, então `/healthz` como sufixo é capturado. Se o path for completamente diferente, adicionar via `customSilentRoutes`.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+### Logs duplicados (Nest Logger + HTTP access log)
 
-## 📄 License
+Quando se usa `createHttpLogger` (Express) ou Fastify com logger built-in, e também `LogInterceptor`, os requests podem ser logados duas vezes. Usar `skipRequestLogging: true` ou `skipResponseLogging: true` no `LogInterceptor` para evitar duplicação.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### `pino-pretty` não está sendo usado em desenvolvimento
 
-## 🆘 Support
+Instalar como devDependency no projeto consumidor:
 
-For support, email support@starbem.app or create an issue in the GitHub repository.
+```bash
+pnpm add -D pino-pretty
+```
 
-## 📚 API Reference
+A lib detecta automaticamente via `require.resolve`.
 
-### Pino Logger
+---
 
-#### `createPinoLogger(config: PinoLoggerConfig): pino.Logger`
+## Referência da API
 
-Creates a configured Pino logger instance with optimized settings for development and production.
+### `createPinoLogger(config, destination?)`
 
-**Parameters:**
+Cria um `pino.Logger` configurado para Datadog.
 
-- `config.serviceName`: Name of the service
-- `config.environment`: Environment ('development' | 'production')
-- `config.logLevel`: Log level ('trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal')
+| Parâmetro | Tipo | Padrão | Descrição |
+|-----------|------|--------|-----------|
+| `serviceName` | `string` | `DD_SERVICE \| SERVICE_NAME \| 'app'` | Nome do serviço em todos os logs |
+| `environment` | `LogEnvironment` | `DD_ENV \| NODE_ENV \| 'development'` | Ambiente de deploy |
+| `logLevel` | `LogLevel` | `'info'` | Nível mínimo de log |
+| `correlationMode` | `CorrelationMode` | `'none'` | Modo de injeção de trace/span IDs |
+| `customSilentRoutes` | `string[]` | `[]` | Rotas extras a silenciar no HTTP access log |
+| `customRedactPaths` | `string[]` | `[]` | Campos extras a redactar |
+| `customFormatters` | `object` | — | Formatters customizados de level e log |
+| `customSerializers` | `object` | — | Serializers customizados de req, res, err |
 
-#### `createHttpLogger(logger: pino.Logger): HttpLogger`
+Retorna: `pino.Logger`
 
-Creates an Express HTTP logging middleware with optimized settings.
+---
 
-**Features:**
+### `createHttpLogger(logger, config?)`
 
-- Automatic silent routes for health checks and metrics
-- Smart log levels based on status codes
-- Request/response serialization
-- Performance tracking
+Cria middleware Express de HTTP access log baseado em `pino-http`.
 
-#### `pinoLogContext.request(req: Request, additionalData?: any): object`
+| Parâmetro | Tipo | Descrição |
+|-----------|------|-----------|
+| `logger` | `pino.Logger` | Logger root criado por `createPinoLogger` |
+| `config.customSilentRoutes` | `string[]` | Rotas extras a silenciar |
 
-Creates request context for logging.
+Comportamento por status code:
+- **2xx / 3xx** em rotas silenciadas → `silent` (não logado)
+- **4xx** em rotas silenciadas → `warn`
+- **4xx** em rotas normais → `warn`
+- **5xx** → `error`
+- **Erro de request** → `error`
+- **2xx / 3xx** em rotas normais → `info`
 
-#### `pinoLogContext.error(error: Error, context?: any): object`
+---
 
-Creates error context for logging.
+### `createNestPinoLoggerService(rootLogger, defaultContext?)`
 
-#### `pinoLogContext.performance(operation: string, duration: number, metadata?: any): object`
+Cria um `LoggerService` do NestJS que delega para Pino. Usado no `NestFactory.create`.
 
-Creates performance context for logging.
+| Parâmetro | Tipo | Descrição |
+|-----------|------|-----------|
+| `rootLogger` | `pino.Logger` | Logger root criado por `createPinoLogger` |
+| `defaultContext` | `string` | Contexto padrão quando não informado na chamada |
 
-#### `pinoLogContext.proxy(target: string, service: string, metadata?: any): object`
+Retorna: `LoggerService`
 
-Creates proxy/API Gateway context for logging.
+Mapeamento de métodos NestJS → Pino:
 
-## 🔗 Links
+| NestJS | Pino |
+|--------|------|
+| `log()` | `info()` |
+| `error()` | `error()` |
+| `warn()` | `warn()` |
+| `debug()` | `debug()` |
+| `verbose()` | `trace()` |
+| `fatal()` | `fatal()` |
 
-- [GitHub Repository](https://github.com/starbem/star-node-stack-helper)
-- [NPM Package](https://www.npmjs.com/package/@starbemtech/star-node-stack-helper)
-- [Documentation](https://github.com/starbem/star-node-stack-helper#readme)
+---
+
+### `createPinoLogWriter(rootLogger, context?)`
+
+Cria um `LogWriter` para usar em interceptors, guards e filters.
+
+| Parâmetro | Tipo | Descrição |
+|-----------|------|-----------|
+| `rootLogger` | `pino.Logger` | Logger root criado por `createPinoLogger` |
+| `context` | `string` | Contexto bound no child logger |
+
+Retorna: `LogWriter`
+
+---
+
+### `buildFastifyLoggerOptions(logger)`
+
+Retorna o objeto de opções para passar ao construtor do Fastify.
+
+```typescript
+const app = Fastify(buildFastifyLoggerOptions(logger))
+// equivalente a: Fastify({ logger })
+```
+
+---
+
+### `buildFastifyLoggerOptionsQuiet(logger)`
+
+Retorna opções para Fastify com request logging desabilitado.
+
+```typescript
+const app = Fastify(buildFastifyLoggerOptionsQuiet(logger))
+// equivalente a: Fastify({ logger, disableRequestLogging: true })
+```
+
+---
+
+### `pinoLogContext`
+
+Helpers para construir objetos de contexto estruturados.
+
+```typescript
+pinoLogContext.request(req, additionalData?)     // contexto de request Express
+pinoLogContext.error(error, context?)             // contexto de erro
+pinoLogContext.performance(operation, duration, metadata?)  // contexto de performance
+pinoLogContext.proxy(target, service, metadata?)  // contexto de chamada externa
+```
+
+---
+
+### Interface `LogWriter`
+
+Interface genérica de escrita estruturada. Implementada por `createPinoLogWriter` e pelo wrapper de fallback do Nest Logger.
+
+```typescript
+interface LogWriter {
+  info:  (message: string, context?: Record<string, unknown>) => void
+  warn:  (message: string, context?: Record<string, unknown>) => void
+  error: (message: string, context?: Record<string, unknown>) => void
+  debug: (message: string, context?: Record<string, unknown>) => void
+  trace: (message: string, context?: Record<string, unknown>) => void
+  fatal: (message: string, context?: Record<string, unknown>) => void
+}
+```
+
+---
+
+### Tipos exportados
+
+```typescript
+import type {
+  PinoLoggerConfig,   // config de createPinoLogger
+  LogLevel,           // 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
+  CorrelationMode,    // 'datadog' | 'otel' | 'none'
+  LogEnvironment,     // 'development' | 'staging' | 'production' | 'local' | 'test'
+  LogWriter,          // interface genérica de log estruturado
+  LogInterceptorOptions,     // opções do LogInterceptor NestJS
+  LogGuardOptions,           // opções do LogGuard NestJS
+  LogExceptionFilterOptions, // opções do LogExceptionFilter NestJS
+} from '@starbemtech/star-node-stack-helper'
+```

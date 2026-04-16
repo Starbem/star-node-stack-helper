@@ -6,13 +6,27 @@ import {
   UnauthorizedException,
   ForbiddenException,
 } from '@nestjs/common'
-import { LogGuardOptions, NestJSLogContext } from '../types'
+import { LogGuardOptions, LogWriter, NestJSLogContext } from '../types'
+
+function createNestLogWriter(contextName: string): LogWriter {
+  const logger = new Logger(contextName)
+  return {
+    info: (msg) => logger.log(msg, contextName),
+    warn: (msg) => logger.warn(msg, contextName),
+    error: (msg) => logger.error(msg, contextName),
+    debug: (msg) => logger.debug(msg, contextName),
+    trace: (msg) => logger.verbose(msg, contextName),
+    fatal: (msg) => logger.error(`[FATAL] ${msg}`, contextName),
+  }
+}
 
 @Injectable()
 export class LogGuard implements CanActivate {
-  private readonly logger = new Logger(LogGuard.name)
+  private readonly writer: LogWriter
 
-  constructor(private readonly options: LogGuardOptions = {}) {}
+  constructor(private readonly options: LogGuardOptions = {}) {
+    this.writer = options.logWriter ?? createNestLogWriter(LogGuard.name)
+  }
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest()
@@ -28,24 +42,19 @@ export class LogGuard implements CanActivate {
     try {
       this.logAccessAttempt(request, baseContext)
 
-      // TODO: Here you can add authentication/authorization logic
-      // For example, check JWT, roles, etc.
       const isAuthenticated = this.checkAuthentication(request)
-
       if (!isAuthenticated) {
         this.logAuthenticationFailure(request, baseContext)
         throw new UnauthorizedException('Authentication required')
       }
 
       const isAuthorized = this.checkAuthorization(request)
-
       if (!isAuthorized) {
         this.logAuthorizationFailure(request, baseContext)
         throw new ForbiddenException('Insufficient permissions')
       }
 
       this.logAccessSuccess(request, baseContext)
-
       return true
     } catch (error) {
       this.logAccessError(request, error, baseContext)
@@ -54,22 +63,17 @@ export class LogGuard implements CanActivate {
   }
 
   private checkAuthentication(request: any): boolean {
-    // TODO: Implement authentication logic
-    // For example, check JWT token
     const token = request.headers.authorization?.replace('Bearer ', '')
-    return !!token // Simplified for example
+    return !!token
   }
 
   private checkAuthorization(_request: any): boolean {
-    // TODO: Implement authorization logic
-    // For example, check roles, permissions, etc.
-    return true // Simplified for example
+    return true
   }
 
   private logAccessAttempt(request: any, context: NestJSLogContext): void {
-    const logLevel = this.options.logLevel || 'info'
-
-    this.logger[logLevel]('Access attempt', {
+    const level = (this.options.logLevel || 'info') as keyof LogWriter
+    this.writer[level]('Access attempt', {
       ...context,
       request: {
         method: request.method,
@@ -83,9 +87,9 @@ export class LogGuard implements CanActivate {
 
   private logAuthenticationFailure(
     request: any,
-    context: NestJSLogContext
+    context: NestJSLogContext,
   ): void {
-    this.logger.warn('Authentication failed', {
+    this.writer.warn('Authentication failed', {
       ...context,
       request: {
         method: request.method,
@@ -98,9 +102,9 @@ export class LogGuard implements CanActivate {
 
   private logAuthorizationFailure(
     request: any,
-    context: NestJSLogContext
+    context: NestJSLogContext,
   ): void {
-    this.logger.warn('Authorization failed', {
+    this.writer.warn('Authorization failed', {
       ...context,
       request: {
         method: request.method,
@@ -108,60 +112,37 @@ export class LogGuard implements CanActivate {
         ip: request.ip,
         userAgent: request.headers['user-agent'],
       },
-      user: {
-        id: request.user?.id,
-        roles: request.user?.roles,
-      },
+      user: { id: request.user?.id, roles: request.user?.roles },
     })
   }
 
   private logAccessSuccess(request: any, context: NestJSLogContext): void {
-    const logLevel = this.options.logLevel || 'info'
-
-    this.logger[logLevel]('Access granted', {
+    const level = (this.options.logLevel || 'info') as keyof LogWriter
+    this.writer[level]('Access granted', {
       ...context,
-      request: {
-        method: request.method,
-        url: request.url,
-        ip: request.ip,
-      },
-      user: {
-        id: request.user?.id,
-        roles: request.user?.roles,
-      },
+      request: { method: request.method, url: request.url, ip: request.ip },
+      user: { id: request.user?.id, roles: request.user?.roles },
     })
   }
 
   private logAccessError(
     request: any,
     error: any,
-    context: NestJSLogContext
+    context: NestJSLogContext,
   ): void {
-    this.logger.error('Access error', {
+    this.writer.error('Access error', {
       ...context,
-      request: {
-        method: request.method,
-        url: request.url,
-        ip: request.ip,
-      },
-      error: {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      },
+      request: { method: request.method, url: request.url, ip: request.ip },
+      error: { name: error.name, message: error.message, stack: error.stack },
     })
   }
 
   private sanitizeHeaders(headers: any): any {
     const sensitiveHeaders = ['authorization', 'cookie', 'x-api-key']
     const sanitized = { ...headers }
-
-    sensitiveHeaders.forEach((header) => {
-      if (sanitized[header]) {
-        sanitized[header] = '[REDACTED]'
-      }
+    sensitiveHeaders.forEach((h) => {
+      if (sanitized[h]) sanitized[h] = '[REDACTED]'
     })
-
     return sanitized
   }
 }

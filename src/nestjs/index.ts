@@ -23,9 +23,16 @@ export { LogGuard } from './guards/log.guard'
 // Filters
 export { LogExceptionFilter } from './filters/log-exception.filter'
 
+// NestJS Pino Logger adapter
+export {
+  createNestPinoLoggerService,
+  createPinoLogWriter,
+} from './logger'
+
 // Types
 export type {
   NestJSLogContext,
+  LogWriter,
   PinoLogger,
   LogInterceptorOptions,
   LogGuardOptions,

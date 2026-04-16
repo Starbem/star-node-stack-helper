@@ -1,4 +1,4 @@
-// Functions
+// Secrets
 export {
   loadSecrets,
   testSavedSecrets,
@@ -6,21 +6,33 @@ export {
   getAWSRegion,
 } from './secrets'
 
+// OpenSearch / Elastic Logger (persistence — not for stdout K8s logging)
 export { ElasticLogger } from './logger'
 
-// Middlewares
+// Express middlewares
 export {
   transactionLoggerMiddleware,
   addTransactionId,
 } from './middlewares/transaction-logger'
 export { performanceLoggerMiddleware } from './middlewares/performance-logger'
 
-// Logger Pino
+// Pino Logger (core — for stdout JSON logging in all APIs)
 export {
   createPinoLogger,
   createHttpLogger,
   logContext as pinoLogContext,
 } from './logger-pino'
+
+export {
+  getDatadogCorrelationFields,
+  getOtelCorrelationFields,
+} from './logger-pino/correlation'
+
+// Fastify integration
+export {
+  buildFastifyLoggerOptions,
+  buildFastifyLoggerOptionsQuiet,
+} from './fastify'
 
 // Slack Notifications
 export {
@@ -46,6 +58,8 @@ export {
   TransactionLog,
   TransactionLogInterceptor,
   AutoTransactionLogInterceptor,
+  createNestPinoLoggerService,
+  createPinoLogWriter,
 } from './nestjs'
 
 // Types
@@ -57,7 +71,11 @@ export type {
 
 export type { LoggerConfig, LogLevel, LogTransaction } from './logger/types'
 
-export type { PinoLoggerConfig } from './logger-pino/types'
+export type {
+  PinoLoggerConfig,
+  CorrelationMode,
+  LogEnvironment,
+} from './logger-pino/types'
 
 export type {
   SlackConfig,
@@ -77,6 +95,7 @@ export type {
 
 export type {
   NestJSLogContext,
+  LogWriter,
   PinoLogger,
   LogInterceptorOptions,
   LogGuardOptions,
